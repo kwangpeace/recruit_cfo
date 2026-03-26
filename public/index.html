@@ -177,6 +177,14 @@
         <button class="btn" onclick="removeCurrentCandidate()">현재 지원자 삭제</button>
         <span class="muted" style="font-size:12px;align-self:center">현재 <b id="cand-count">0</b>명</span>
       </div>
+      <div class="actions" style="padding:0 2px; margin:-12px 0 14px; justify-content:flex-start;gap:10px;">
+        <span class="muted" style="font-size:12px;align-self:center;white-space:nowrap;">면접관</span>
+        <select id="interviewer" onchange="switchInterviewer()" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);">
+        </select>
+        <button class="btn" onclick="addInterviewer()">+ 면접관 추가</button>
+        <button class="btn" onclick="removeCurrentInterviewer()">현재 면접관 삭제</button>
+        <span class="muted" style="font-size:12px;align-self:center;">현재 <b id="interviewer-count">0</b>명</span>
+      </div>
 
       <div class="score-box">
         <div class="metric"><div class="lbl">총점</div><div class="val" id="total">0</div><div class="sub">/ 100점</div></div>
@@ -400,9 +408,16 @@
       }
 
       let cur = 0;
+      let interviewers = [{ name: "면접관 1" }];
+      let currentInterviewerIndex = 0;
+
+      function emptyScores() {
+        return Array(12).fill(0);
+      }
+
       let candidates = Array.from({length:INITIAL_CANDIDATES},(_,i)=>({
         name: i===0?'지원자 A':i===1?'지원자 B':i===2?'지원자 C':i===3?'지원자 D':`지원자 ${i+1}`,
-        scores: Array(12).fill(0)
+        scoresByInterviewer: interviewers.map(() => emptyScores())
       }));
 
       function toast(msg){
@@ -427,11 +442,61 @@
         loadCandidate();
       }
 
+      function buildInterviewerSelect(){
+        const el = document.getElementById("interviewer");
+        if(!el) return;
+        el.innerHTML = interviewers.map((it, i) =>
+          `<option value="${i}"${i===currentInterviewerIndex?' selected':''}>${escapeHtml(it.name || `면접관 ${i+1}`)}</option>`
+        ).join("");
+        const ic = document.getElementById("interviewer-count");
+        if(ic) ic.textContent = String(interviewers.length);
+      }
+
+      function switchInterviewer(){
+        const el = document.getElementById("interviewer");
+        const v = el ? parseInt(el.value, 10) : 0;
+        currentInterviewerIndex = Number.isFinite(v) ? v : 0;
+        loadCandidate();
+      }
+
+      function addInterviewer(){
+        const n = interviewers.length + 1;
+        interviewers.push({ name: `면접관 ${n}` });
+        candidates.forEach(c => {
+          if(!Array.isArray(c.scoresByInterviewer)) c.scoresByInterviewer = [];
+          c.scoresByInterviewer.push(emptyScores());
+        });
+        currentInterviewerIndex = interviewers.length - 1;
+        buildInterviewerSelect();
+        loadCandidate();
+        toast("면접관을 추가했어요.");
+      }
+
+      function removeCurrentInterviewer(){
+        if(interviewers.length <= 1){
+          toast("면접관은 최소 1명은 남겨야 해요.");
+          return;
+        }
+        const removed = interviewers[currentInterviewerIndex]?.name || "면접관";
+        interviewers.splice(currentInterviewerIndex, 1);
+        candidates.forEach(c => {
+          if(Array.isArray(c.scoresByInterviewer)){
+            c.scoresByInterviewer.splice(currentInterviewerIndex, 1);
+          }
+        });
+        if(currentInterviewerIndex >= interviewers.length){
+          currentInterviewerIndex = interviewers.length - 1;
+        }
+        buildInterviewerSelect();
+        loadCandidate();
+        toast(`${removed} 삭제 완료`);
+      }
+
       function addCandidate(){
         const n = candidates.length + 1;
         candidates.push({
           name: `지원자 ${n}`,
-          scores: Array(12).fill(0),
+          scoresByInterviewer: interviewers.map(() => emptyScores()),
         });
         cur = candidates.length - 1;
         buildCtabs();
@@ -454,14 +519,16 @@
 
       function loadCandidate(){
         if(!candidates.length){
-          candidates = [{ name: "지원자 1", scores: Array(12).fill(0) }];
+          candidates = [{ name: "지원자 1", scoresByInterviewer: interviewers.map(() => emptyScores()) }];
           cur = 0;
           buildCtabs();
         }
         document.getElementById('cname').value = candidates[cur].name;
-        const selects = document.querySelectorAll('#entry select');
+        const selects = document.querySelectorAll('#entry select[onchange^="score("]');
         selects.forEach((s,i)=>{
-          s.value = candidates[cur].scores[i];
+          const by = candidates[cur].scoresByInterviewer || [candidates[cur].scores || emptyScores()];
+          const arr = by[currentInterviewerIndex] || emptyScores();
+          s.value = arr[i] ?? 0;
         });
         recalc();
       }
@@ -472,37 +539,85 @@
       }
 
       function score(idx, val){
-        candidates[cur].scores[idx] = parseInt(val) || 0;
+        const by = candidates[cur].scoresByInterviewer || [];
+        if(!by[currentInterviewerIndex]) by[currentInterviewerIndex] = emptyScores();
+        by[currentInterviewerIndex][idx] = parseInt(val) || 0;
+        candidates[cur].scoresByInterviewer = by;
         recalc();
       }
 
+      function avgScoresOfCandidate(c){
+        const by = Array.isArray(c?.scoresByInterviewer)
+          ? c.scoresByInterviewer
+          : (c?.scores ? [c.scores] : []);
+        const n = Math.max(1, by.length);
+        const out = Array(12).fill(0);
+        for(const arr of by){
+          for(let i=0;i<12;i++) out[i] += parseInt(arr?.[i]) || 0;
+        }
+        return out.map(v => v / n);
+      }
+
+      function fmt1(x){
+        const n = Math.round(x * 10) / 10;
+        const isInt = Math.abs(n - Math.round(n)) < 1e-9;
+        return isInt ? String(Math.round(n)) : n.toFixed(1);
+      }
+
+      function normalizeCandidate(c){
+        const name = c?.name || "지원자";
+        if(Array.isArray(c?.scoresByInterviewer)){
+          const targetLen = Math.max(1, interviewers.length);
+          const outBy = Array.from({ length: targetLen }, () => emptyScores());
+          for(let j=0;j<targetLen;j++){
+            const arr = c.scoresByInterviewer[j];
+            if(!arr) continue;
+            for(let i=0;i<12;i++){
+              outBy[j][i] = parseInt(arr?.[i]) || 0;
+            }
+          }
+          return { name, scoresByInterviewer: outBy };
+        }
+        if(Array.isArray(c?.scores)){
+          const out = Array(12).fill(0);
+          for(let i=0;i<12;i++){
+            out[i] = parseInt(c.scores?.[i]) || 0;
+          }
+          const targetLen = Math.max(1, interviewers.length);
+          const outBy = Array.from({ length: targetLen }, () => emptyScores());
+          outBy[0] = out;
+          return { name, scoresByInterviewer: outBy };
+        }
+        return { name, scoresByInterviewer: interviewers.map(() => emptyScores()) };
+      }
+
       function recalc(){
-        const s = candidates[cur].scores;
-        const sa = s[0]+s[1]+s[2];
-        const sb = s[3]+s[4]+s[5]+s[6];
-        const sc = s[7]+s[8]+s[9];
-        const sd = s[10]+s[11];
+        const avg = avgScoresOfCandidate(candidates[cur] || {});
+        const sa = avg[0]+avg[1]+avg[2];
+        const sb = avg[3]+avg[4]+avg[5]+avg[6];
+        const sc = avg[7]+avg[8]+avg[9];
+        const sd = avg[10]+avg[11];
         const tot = sa+sb+sc+sd;
 
-        document.getElementById('total').textContent = tot;
-        document.getElementById('sa').textContent = sa;
-        document.getElementById('sb').textContent = sb;
-        document.getElementById('scd').textContent = sc+sd;
-        document.getElementById('pts-a').textContent = sa+' / 30점';
-        document.getElementById('pts-b').textContent = sb+' / 40점';
-        document.getElementById('pts-c').textContent = sc+' / 20점';
-        document.getElementById('pts-d').textContent = sd+' / 10점';
+        document.getElementById('total').textContent = fmt1(tot);
+        document.getElementById('sa').textContent = fmt1(sa);
+        document.getElementById('sb').textContent = fmt1(sb);
+        document.getElementById('scd').textContent = fmt1(sc+sd);
+        document.getElementById('pts-a').textContent = fmt1(sa)+' / 30점';
+        document.getElementById('pts-b').textContent = fmt1(sb)+' / 40점';
+        document.getElementById('pts-c').textContent = fmt1(sc)+' / 20점';
+        document.getElementById('pts-d').textContent = fmt1(sd)+' / 10점';
 
         const vd = document.getElementById('verdict');
         if(sa < 20){
           vd.className='verdict v-fail';
-          vd.textContent='판정: 서류 탈락 — 필수요건(A) 미달 ('+sa+'/30점)';
+          vd.textContent='판정: 서류 탈락 — 필수요건(A) 미달 ('+fmt1(sa)+'/30점)';
         } else if(tot >= 70){
           vd.className='verdict v-pass';
-          vd.textContent='판정: 합격 권고 — 총점 '+tot+'점 (기준 70점 이상)';
+          vd.textContent='판정: 합격 권고 — 총점 '+fmt1(tot)+'점 (기준 70점 이상)';
         } else {
           vd.className='verdict v-review';
-          vd.textContent='판정: 검토 필요 — 총점 '+tot+'점 (기준 미달, 개별 판단 권고)';
+          vd.textContent='판정: 검토 필요 — 총점 '+fmt1(tot)+'점 (기준 미달, 개별 판단 권고)';
         }
       }
 
@@ -526,16 +641,17 @@
       }
 
       function getVerdict(c){
-        const s = c.scores;
-        const sa = s[0]+s[1]+s[2];
-        const tot = s.reduce((a,b)=>a+b,0);
+        const avg = avgScoresOfCandidate(c || {});
+        const sa = avg[0]+avg[1]+avg[2];
+        const tot = avg.reduce((a,b)=>a+b,0);
         if(sa<20) return 'fail';
         if(tot>=70) return 'pass';
         return 'review';
       }
 
       function buildMatrix(){
-        const totals = candidates.map(c=>c.scores.reduce((a,b)=>a+b,0));
+        const avgScoresList = candidates.map(c => avgScoresOfCandidate(c));
+        const totals = avgScoresList.map(s => s.reduce((a,b)=>a+b,0));
         const topIdx = totals.indexOf(Math.max(...totals));
         const COLS = candidates.length;
 
@@ -546,9 +662,9 @@
           {key:'d',label:'D. 문화·리더십',max:10},
         ];
 
-        const secTots = (c,k) => {
+        const secTots = (avgScores,k) => {
           const idxs = ITEMS.map((it,i)=>it.sec===k?i:-1).filter(x=>x>=0);
-          return idxs.reduce((a,i)=>a+c.scores[i],0);
+          return idxs.reduce((a,i)=>a+avgScores[i],0);
         };
 
         let rows = '';
@@ -558,25 +674,25 @@
           ITEMS.forEach((it,i)=>{
             if(it.sec!==sec.key) return;
             rows += `<tr><td class="left">${it.label} (${it.max}점)</td>`;
-            candidates.forEach(c=>{
-              const v = c.scores[i];
+            candidates.forEach((_c, ci)=>{
+              const v = avgScoresList[ci][i];
               const pct = Math.round(v/it.max*100);
-              rows += `<td>${v}<span class="bar-wrap"><span class="bar-fill" style="width:${pct}%"></span></span></td>`;
+              rows += `<td>${fmt1(v)}<span class="bar-wrap"><span class="bar-fill" style="width:${pct}%"></span></span></td>`;
             });
             rows += '</tr>';
           });
           rows += `<tr style="background:var(--color-background-secondary)"><td class="left" style="font-weight:500">소계</td>`;
-          candidates.forEach(c=>{
-            rows += `<td style="font-weight:500">${secTots(c,sec.key)}</td>`;
+          candidates.forEach((_c, ci)=>{
+            rows += `<td style="font-weight:500">${fmt1(secTots(avgScoresList[ci],sec.key))}</td>`;
           });
           rows += '</tr>';
         });
 
         rows += `<tr style="border-top:1px solid var(--color-border-secondary)"><td class="left" style="font-weight:500;font-size:13px">총점</td>`;
-        candidates.forEach((c,i)=>{
-          const tot = c.scores.reduce((a,b)=>a+b,0);
+        candidates.forEach((_c,i)=>{
+          const tot = avgScoresList[i].reduce((a,b)=>a+b,0);
           const badge = i===topIdx?`<span class="top-badge">최고점</span>`:'';
-          rows += `<td style="font-weight:500;font-size:13px">${tot}${badge}</td>`;
+          rows += `<td style="font-weight:500;font-size:13px">${fmt1(tot)}${badge}</td>`;
         });
         rows += '</tr>';
 
@@ -608,7 +724,7 @@
       let radarChart = null;
       function radarLabelsAndValues(mode, c){
         if(mode === "sections"){
-          const s = c.scores;
+          const s = avgScoresOfCandidate(c || {});
           const sa = s[0]+s[1]+s[2];
           const sb = s[3]+s[4]+s[5]+s[6];
           const sc = s[7]+s[8]+s[9];
@@ -622,7 +738,7 @@
         // items (default)
         return {
           labels: ITEMS.map(it => it.label.replaceAll(" ", "")),
-          values: c.scores.map(v => parseInt(v) || 0),
+          values: avgScoresOfCandidate(c || {}).map(v => parseFloat(v) || 0),
           max: 10
         };
       }
@@ -710,7 +826,7 @@
         const btn = document.getElementById("btn-save");
         btn.disabled = true;
         try{
-          const payload = { candidates };
+          const payload = { interviewers, candidates };
           const name = `${candidates[0]?.name ?? "평가"}`;
           const res = await fetch("/api/evaluations", {
             method:"POST",
@@ -738,7 +854,7 @@
 
       function summarize(payload){
         const cs = payload?.candidates || [];
-        const totals = cs.map(c => (c.scores || []).reduce((a,b)=>a+(parseInt(b)||0),0));
+        const totals = cs.map(c => avgScoresOfCandidate(c).reduce((a,b)=>a+b,0));
         const best = totals.length ? Math.max(...totals) : 0;
         return { count: cs.length, best };
       }
@@ -771,7 +887,7 @@
                   <div class="right">
                     <div class="kvs">
                       <span class="kv">지원자 ${s.count}명</span>
-                      <span class="kv">최고점 ${s.best}점</span>
+                      <span class="kv">최고점 ${fmt1(s.best)}점</span>
                     </div>
                     <button class="btn" onclick="openEval('${r.id}')">열기</button>
                     <button class="btn" onclick="copyText('${escapeAttr(url.toString())}')">링크</button>
@@ -793,8 +909,18 @@
           const data = await res.json().catch(()=>({}));
           if(!res.ok || !data.ok) throw new Error(data.error || "불러오기 실패");
           const row = data.row;
-          candidates = row.payload?.candidates || candidates;
+          const payload = row.payload || {};
+          const nextInterviewers = Array.isArray(payload.interviewers) && payload.interviewers.length
+            ? payload.interviewers
+            : [{ name: "면접관 1" }];
+          interviewers = nextInterviewers.map((it, i) => ({ name: it?.name || `면접관 ${i+1}` }));
+
+          const nextCandidatesRaw = Array.isArray(payload.candidates) ? payload.candidates : [];
+          candidates = nextCandidatesRaw.map(normalizeCandidate);
+
           cur = 0;
+          currentInterviewerIndex = 0;
+          buildInterviewerSelect();
           buildCtabs();
           loadCandidate();
           const u = new URL(location.href);
@@ -822,6 +948,7 @@
       function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#96;"); }
 
       // init
+      buildInterviewerSelect();
       buildCtabs();
       loadCandidate();
       // auto load when id exists (works even for fresh loads)
@@ -832,7 +959,17 @@
             if(res.ok){
               const data = await res.json().catch(()=>null);
               if(data?.ok && data?.row?.payload?.candidates){
-                candidates = data.row.payload.candidates;
+                const payload = data.row.payload || {};
+                const nextInterviewers = Array.isArray(payload.interviewers) && payload.interviewers.length
+                  ? payload.interviewers
+                  : [{ name: "면접관 1" }];
+                interviewers = nextInterviewers.map((it, i) => ({ name: it?.name || `면접관 ${i+1}` }));
+
+                const nextCandidatesRaw = Array.isArray(payload.candidates) ? payload.candidates : [];
+                candidates = nextCandidatesRaw.map(normalizeCandidate);
+
+                currentInterviewerIndex = 0;
+                buildInterviewerSelect();
                 buildCtabs();
                 loadCandidate();
               }
