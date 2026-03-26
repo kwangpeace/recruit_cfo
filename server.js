@@ -445,10 +445,22 @@ ${resumeText}`;
 
       return res.json({ ok: true, scores, modelText: text.slice(0, 800) });
     } catch (e) {
+      console.error("[gemini/evaluate] error", e);
       return res.status(500).json({ ok: false, error: String(e?.message ?? e) });
     }
   }
 );
+
+// Ensure multer/upload errors return JSON (not HTML)
+app.use((err, req, res, next) => {
+  if (!err) return next();
+  const isApi = String(req.originalUrl || "").startsWith("/api/");
+  if (!isApi) return next(err);
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ ok: false, error: "file too large (max 5MB)" });
+  }
+  return res.status(400).json({ ok: false, error: String(err?.message ?? err) });
+});
 
 // Save or update evaluation (shared)
 app.post("/api/evaluations", async (req, res) => {

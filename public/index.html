@@ -584,7 +584,10 @@
             body: formData
           });
           const data = await res.json().catch(()=>null);
-          if(!res.ok || !data?.ok) throw new Error(data?.error || "Gemini 평가 실패");
+          if(!res.ok || !data?.ok){
+            const fallback = await res.text().catch(()=> "");
+            throw new Error(data?.error || fallback || "Gemini 평가 실패");
+          }
           const scores = data?.scores;
           if(!Array.isArray(scores) || scores.length !== 12) throw new Error("응답 형식이 올바르지 않습니다.");
 
@@ -594,8 +597,9 @@
           refreshEvalContext();
           status.textContent = "";
         }catch(e){
-          status.textContent = "";
-          toast(`Gemini 평가 실패: ${String(e?.message ?? e)}`);
+          const msg = String(e?.message ?? e);
+          status.textContent = msg ? `실패: ${msg}` : "";
+          toast(`Gemini 평가 실패: ${msg}`);
         }
       }
 
