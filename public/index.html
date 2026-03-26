@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CFO 후보자 평가표 (공유)</title>
+  <style>
+    :root{
+      --font-sans: "Segoe UI", "Noto Sans KR", sans-serif;
+      --color-text-primary:#111827;
+      --color-text-secondary:#6B7280;
+      --color-text-info:#0C4A6E;
+      --color-background-primary:#FFFFFF;
+      --color-background-secondary:#F8FAFC;
+      --color-background-info:#E0F2FE;
+      --color-border-primary:#CBD5E1;
+      --color-border-secondary:#D1D5DB;
+      --color-border-tertiary:#E5E7EB;
+      --color-border-info:#7DD3FC;
+      --border-radius-md:8px;
+      --border-radius-lg:12px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:var(--font-sans,sans-serif);
+      font-size:14px;
+      color:var(--color-text-primary);
+      background:#F3F4F6;
+      padding:20px;
+    }
+    .app{
+      max-width:1080px;
+      margin:0 auto;
+      background:var(--color-background-primary);
+      border:1px solid var(--color-border-tertiary);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:0 8px 28px rgba(15,23,42,0.08);
+    }
+    .header{
+      padding:14px 16px 0;
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .title{
+      display:flex;flex-direction:column;gap:4px;
+    }
+    .title h1{font-size:16px;font-weight:650;letter-spacing:-0.2px}
+    .title p{font-size:12px;color:var(--color-text-secondary)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{
+      padding:8px 12px;
+      border-radius:var(--border-radius-md);
+      border:0.5px solid var(--color-border-secondary);
+      background:var(--color-background-secondary);
+      color:var(--color-text-primary);
+      cursor:pointer;
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .btn.primary{
+      background:#111827;
+      color:#fff;
+      border-color:#111827;
+    }
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .muted{color:var(--color-text-secondary)}
+    .toast{
+      margin:10px 16px 0;
+      padding:10px 12px;
+      border-radius:var(--border-radius-md);
+      border:0.5px solid var(--color-border-tertiary);
+      background:var(--color-background-secondary);
+      font-size:12px;
+      display:none;
+    }
+    .toast.show{display:block}
+
+    .tabs{display:flex;gap:6px;padding:1rem 1rem 0}
+    .tab{padding:7px 16px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;font-size:13px;color:var(--color-text-secondary);transition:all .15s}
+    .tab.active{background:var(--color-background-primary);color:var(--color-text-primary);font-weight:500;border-color:var(--color-border-primary)}
+    .panel{display:none;padding:1rem}
+    .panel.active{display:block}
+    .candidate-tabs{display:flex;gap:4px;margin-bottom:1rem;flex-wrap:wrap}
+    .ctab{padding:5px 12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:transparent;cursor:pointer;font-size:12px;color:var(--color-text-secondary)}
+    .ctab.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info);font-weight:500}
+    .sec{margin-bottom:1.25rem;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden}
+    .sec-head{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:var(--color-background-secondary)}
+    .sec-head span{font-size:12px;font-weight:500;color:var(--color-text-secondary)}
+    .sec-head .pts{font-size:12px;color:var(--color-text-secondary)}
+    .row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 14px;border-top:0.5px solid var(--color-border-tertiary)}
+    .row label{font-size:13px;color:var(--color-text-primary)}
+    .row select{font-size:12px;padding:4px 8px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);width:160px}
+    .score-box{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+    .metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 12px}
+    .metric .lbl{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px}
+    .metric .val{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+    .metric .sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+    .verdict{padding:10px 14px;border-radius:var(--border-radius-md);font-size:13px;font-weight:500;margin-bottom:1.25rem;border:0.5px solid}
+    .v-pass{background:#EAF3DE;color:#27500A;border-color:#97C459}
+    .v-review{background:#FAEEDA;color:#633806;border-color:#EF9F27}
+    .v-fail{background:#FCEBEB;color:#791F1F;border-color:#F09595}
+    .cname-input{width:100%;padding:6px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;margin-bottom:1rem}
+    .matrix-wrap{overflow-x:auto}
+    .matrix-table{width:100%;border-collapse:collapse;font-size:12px}
+    .matrix-table th{padding:8px 10px;text-align:center;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);font-weight:500;color:var(--color-text-secondary)}
+    .matrix-table th.left{text-align:left}
+    .matrix-table td{padding:7px 10px;border:0.5px solid var(--color-border-tertiary);text-align:center;color:var(--color-text-primary)}
+    .matrix-table td.left{text-align:left;color:var(--color-text-secondary);font-size:11px;background:var(--color-background-secondary)}
+    .matrix-table td.cat{text-align:left;font-weight:500;font-size:12px;background:var(--color-background-secondary);padding-left:14px}
+    .pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+    .pill-pass{background:#EAF3DE;color:#27500A}
+    .pill-review{background:#FAEEDA;color:#633806}
+    .pill-fail{background:#FCEBEB;color:#791F1F}
+    .bar-wrap{height:6px;background:var(--color-background-secondary);border-radius:3px;width:60px;display:inline-block;vertical-align:middle;margin-left:4px}
+    .bar-fill{height:6px;border-radius:3px;background:#378ADD}
+    .top-badge{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--color-background-info);color:var(--color-text-info);margin-left:6px}
+
+    .shared{
+      display:grid;
+      gap:10px;
+    }
+    .shared-list{
+      border:0.5px solid var(--color-border-tertiary);
+      border-radius:var(--border-radius-lg);
+      overflow:hidden;
+    }
+    .shared-item{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-top:0.5px solid var(--color-border-tertiary);
+      gap:12px;
+    }
+    .shared-item:first-child{border-top:0}
+    .shared-item .meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .shared-item .meta .name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .shared-item .meta .sub{font-size:11px;color:var(--color-text-secondary)}
+    .shared-item .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .kvs{display:flex;gap:8px;flex-wrap:wrap}
+    .kv{font-size:11px;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);padding:5px 8px;border-radius:999px}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="header">
+      <div class="title">
+        <h1>CFO 후보자 평가표</h1>
+        <p class="muted">Railway 배포용 · 저장하면 다른 사람도 “공유 보기”에서 확인할 수 있어요.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" onclick="copyShareLink()">공유 링크 복사</button>
+        <button class="btn primary" id="btn-save" onclick="saveShared()">서버에 저장</button>
+      </div>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('entry')">점수 입력</button>
+      <button class="tab" onclick="switchTab('matrix')">비교 매트릭스</button>
+      <button class="tab" onclick="switchTab('shared')">공유 보기</button>
+    </div>
+
+    <div id="entry" class="panel active">
+      <div class="candidate-tabs" id="ctabs"></div>
+
+      <input class="cname-input" id="cname" placeholder="지원자 이름 입력" oninput="saveName(this.value)">
+
+      <div class="score-box">
+        <div class="metric"><div class="lbl">총점</div><div class="val" id="total">0</div><div class="sub">/ 100점</div></div>
+        <div class="metric"><div class="lbl">A. 필수요건</div><div class="val" id="sa">0</div><div class="sub">/ 30점</div></div>
+        <div class="metric"><div class="lbl">B. 직무역량</div><div class="val" id="sb">0</div><div class="sub">/ 40점</div></div>
+        <div class="metric"><div class="lbl">C+D. 기타</div><div class="val" id="scd">0</div><div class="sub">/ 30점</div></div>
+      </div>
+
+      <div id="verdict" class="verdict v-fail">판정: 평가 전</div>
+
+      <div class="sec">
+        <div class="sec-head"><span>A. 필수 자격 요건</span><span class="pts" id="pts-a">0 / 30점</span></div>
+        <div class="row">
+          <label>A1. 재무/회계 경력 연수</label>
+          <select onchange="score(0,this.value)">
+            <option value="0">선택</option>
+            <option value="10">20년+ &amp; 스타트업 CFO (10점)</option>
+            <option value="7">15~19년 &amp; 스타트업 재무총괄 (7점)</option>
+            <option value="4">15년+ 대기업 재무 (4점)</option>
+            <option value="0">15년 미만 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>A2. 대규모 투자유치 / IPO 실적</label>
+          <select onchange="score(1,this.value)">
+            <option value="0">선택</option>
+            <option value="10">Series B+ &amp; IPO 모두 (10점)</option>
+            <option value="7">Series B+ 직접 리딩 (7점)</option>
+            <option value="3">Series A 또는 참여 수준 (3점)</option>
+            <option value="0">해당 없음 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>A3. AI / SaaS 비즈니스 이해도</label>
+          <select onchange="score(2,this.value)">
+            <option value="0">선택</option>
+            <option value="10">AI/SaaS 기업 CFO 직접 경험 (10점)</option>
+            <option value="6">테크 스타트업 재무 경험 (6점)</option>
+            <option value="3">IT 인접 업종 경험 (3점)</option>
+            <option value="0">전무 (0점)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head"><span>B. 핵심 직무 역량</span><span class="pts" id="pts-b">0 / 40점</span></div>
+        <div class="row">
+          <label>B1. IR 전략 수립 및 실행력</label>
+          <select onchange="score(3,this.value)">
+            <option value="0">선택</option>
+            <option value="10">후속 라운드 전략·실행 직접 리딩 (10점)</option>
+            <option value="6">IR 자료 제작·투자자 미팅 경험 (6점)</option>
+            <option value="3">IR 지원 수준 (3점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>B2. 재무계획 &amp; 캐시플로우 관리</label>
+          <select onchange="score(4,this.value)">
+            <option value="0">선택</option>
+            <option value="10">Burn rate·런웨이 직접 통제 (10점)</option>
+            <option value="6">예산 수립·관리 경험 (6점)</option>
+            <option value="2">분석 보조 수준 (2점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>B3. 내부 통제 &amp; 거버넌스 구축</label>
+          <select onchange="score(5,this.value)">
+            <option value="0">선택</option>
+            <option value="10">IPO 대비 시스템 직접 구축 (10점)</option>
+            <option value="6">내부 통제 개선 리딩 (6점)</option>
+            <option value="2">감사 대응 참여 (2점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>B4. VC·PE·금융권 네트워크</label>
+          <select onchange="score(6,this.value)">
+            <option value="0">선택</option>
+            <option value="10">Top-tier VC/PE 다수 직접 네트워크 (10점)</option>
+            <option value="6">국내 주요 VC 네트워크 (6점)</option>
+            <option value="2">금융권 일반 네트워크 (2점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head"><span>C. 우대 사항</span><span class="pts" id="pts-c">0 / 20점</span></div>
+        <div class="row">
+          <label>C1. 글로벌 확장 경험</label>
+          <select onchange="score(7,this.value)">
+            <option value="0">선택</option>
+            <option value="8">해외 법인 설립·운영 직접 리딩 (8점)</option>
+            <option value="4">해외 법인 재무 관리 참여 (4점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>C2. 기술 특례 상장 프로세스 리딩</label>
+          <select onchange="score(8,this.value)">
+            <option value="0">선택</option>
+            <option value="7">기술 특례 상장 직접 리딩 (7점)</option>
+            <option value="4">일반 IPO 직접 리딩 (4점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>C3. MBA / CPA 자격증</label>
+          <select onchange="score(9,this.value)">
+            <option value="0">선택</option>
+            <option value="5">MBA + CPA 모두 (5점)</option>
+            <option value="3">둘 중 하나 (3점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head"><span>D. 문화·리더십 적합도</span><span class="pts" id="pts-d">0 / 10점</span></div>
+        <div class="row">
+          <label>D1. 스타트업 환경 적응력</label>
+          <select onchange="score(10,this.value)">
+            <option value="0">선택</option>
+            <option value="5">스타트업 창업·초기 멤버 경험 (5점)</option>
+            <option value="3">스타트업 임원 경험 (3점)</option>
+            <option value="1">대기업 경험만 (1점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>D2. CEO 협업·데이터 기반 의사결정</label>
+          <select onchange="score(11,this.value)">
+            <option value="0">선택</option>
+            <option value="5">CEO 직접 보좌 &amp; 사업성 분석 리딩 (5점)</option>
+            <option value="3">C-level 협업 경험 (3점)</option>
+            <option value="1">간접 참여 (1점)</option>
+            <option value="0">없음 (0점)</option>
+          </select>
+        </div>
+      </div>
+
+      <button onclick="switchTab('matrix')" class="btn" style="width:100%;">비교 매트릭스 보기 ↗</button>
+    </div>
+
+    <div id="matrix" class="panel">
+      <div id="matrix-content"></div>
+      <button onclick="switchTab('entry')" class="btn" style="margin-top:1rem;width:100%;">← 점수 입력으로 돌아가기</button>
+    </div>
+
+    <div id="shared" class="panel">
+      <div class="shared">
+        <div class="sec">
+          <div class="sec-head"><span>공유 보기 (저장된 평가)</span><span class="pts" id="shared-count">0건</span></div>
+          <div style="padding:10px 14px" class="muted">
+            “서버에 저장”을 누르면 여기에 기록이 쌓이고, 다른 접속자도 동일하게 볼 수 있어요.
+          </div>
+        </div>
+        <div class="actions" style="padding:0 2px">
+          <button class="btn" onclick="refreshShared()">새로고침</button>
+          <span class="muted" id="shared-status" style="font-size:12px;align-self:center"></span>
+        </div>
+        <div id="shared-list" class="shared-list"></div>
+      </div>
+    </div>
+
+    <script>
+      const MAX_C = 4;
+      const ITEMS = [
+        {label:'A1. 재무/회계 경력',sec:'a',max:10},
+        {label:'A2. 투자유치/IPO',sec:'a',max:10},
+        {label:'A3. AI/SaaS 이해',sec:'a',max:10},
+        {label:'B1. IR 전략·실행',sec:'b',max:10},
+        {label:'B2. 재무계획·캐시플로',sec:'b',max:10},
+        {label:'B3. 내부통제·거버넌스',sec:'b',max:10},
+        {label:'B4. VC·PE 네트워크',sec:'b',max:10},
+        {label:'C1. 글로벌 확장',sec:'c',max:8},
+        {label:'C2. 기술특례 상장',sec:'c',max:7},
+        {label:'C3. MBA/CPA',sec:'c',max:5},
+        {label:'D1. 스타트업 적응',sec:'d',max:5},
+        {label:'D2. CEO 협업',sec:'d',max:5},
+      ];
+
+      const qs = new URLSearchParams(location.search);
+      const evaluationId = qs.get("id") || crypto.randomUUID();
+      if(!qs.get("id")){
+        const u = new URL(location.href);
+        u.searchParams.set("id", evaluationId);
+        history.replaceState(null, "", u);
+      }
+
+      let cur = 0;
+      let candidates = Array.from({length:MAX_C},(_,i)=>({
+        name: i===0?'지원자 A':i===1?'지원자 B':i===2?'지원자 C':'지원자 D',
+        scores: Array(12).fill(0)
+      }));
+
+      function toast(msg){
+        const el = document.getElementById("toast");
+        el.textContent = msg;
+        el.classList.add("show");
+        setTimeout(()=>el.classList.remove("show"), 2600);
+      }
+
+      function buildCtabs(){
+        const el = document.getElementById('ctabs');
+        el.innerHTML = candidates.map((c,i)=>
+          `<button class="ctab${i===cur?' active':''}" onclick="switchC(${i})">${escapeHtml(c.name)}</button>`
+        ).join('');
+      }
+
+      function switchC(i){
+        cur = i;
+        buildCtabs();
+        loadCandidate();
+      }
+
+      function loadCandidate(){
+        document.getElementById('cname').value = candidates[cur].name;
+        const selects = document.querySelectorAll('#entry select');
+        selects.forEach((s,i)=>{
+          s.value = candidates[cur].scores[i];
+        });
+        recalc();
+      }
+
+      function saveName(v){
+        candidates[cur].name = v || ('지원자'+(cur+1));
+        buildCtabs();
+      }
+
+      function score(idx, val){
+        candidates[cur].scores[idx] = parseInt(val) || 0;
+        recalc();
+      }
+
+      function recalc(){
+        const s = candidates[cur].scores;
+        const sa = s[0]+s[1]+s[2];
+        const sb = s[3]+s[4]+s[5]+s[6];
+        const sc = s[7]+s[8]+s[9];
+        const sd = s[10]+s[11];
+        const tot = sa+sb+sc+sd;
+
+        document.getElementById('total').textContent = tot;
+        document.getElementById('sa').textContent = sa;
+        document.getElementById('sb').textContent = sb;
+        document.getElementById('scd').textContent = sc+sd;
+        document.getElementById('pts-a').textContent = sa+' / 30점';
+        document.getElementById('pts-b').textContent = sb+' / 40점';
+        document.getElementById('pts-c').textContent = sc+' / 20점';
+        document.getElementById('pts-d').textContent = sd+' / 10점';
+
+        const vd = document.getElementById('verdict');
+        if(sa < 20){
+          vd.className='verdict v-fail';
+          vd.textContent='판정: 서류 탈락 — 필수요건(A) 미달 ('+sa+'/30점)';
+        } else if(tot >= 70){
+          vd.className='verdict v-pass';
+          vd.textContent='판정: 합격 권고 — 총점 '+tot+'점 (기준 70점 이상)';
+        } else {
+          vd.className='verdict v-review';
+          vd.textContent='판정: 검토 필요 — 총점 '+tot+'점 (기준 미달, 개별 판단 권고)';
+        }
+      }
+
+      function switchTab(t){
+        const tabs = ['entry','matrix','shared'];
+        document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active', tabs[i]===t));
+        document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+        document.getElementById(t).classList.add('active');
+        if(t==='matrix') buildMatrix();
+        if(t==='shared') refreshShared();
+      }
+
+      function getVerdict(c){
+        const s = c.scores;
+        const sa = s[0]+s[1]+s[2];
+        const tot = s.reduce((a,b)=>a+b,0);
+        if(sa<20) return 'fail';
+        if(tot>=70) return 'pass';
+        return 'review';
+      }
+
+      function buildMatrix(){
+        const totals = candidates.map(c=>c.scores.reduce((a,b)=>a+b,0));
+        const topIdx = totals.indexOf(Math.max(...totals));
+
+        const secs = [
+          {key:'a',label:'A. 필수 자격 요건',max:30},
+          {key:'b',label:'B. 핵심 직무 역량',max:40},
+          {key:'c',label:'C. 우대 사항',max:20},
+          {key:'d',label:'D. 문화·리더십',max:10},
+        ];
+
+        const secTots = (c,k) => {
+          const idxs = ITEMS.map((it,i)=>it.sec===k?i:-1).filter(x=>x>=0);
+          return idxs.reduce((a,i)=>a+c.scores[i],0);
+        };
+
+        let rows = '';
+
+        secs.forEach(sec=>{
+          rows += `<tr><td class="cat" colspan="${MAX_C+1}">${sec.label} (만점 ${sec.max}점)</td></tr>`;
+          ITEMS.forEach((it,i)=>{
+            if(it.sec!==sec.key) return;
+            rows += `<tr><td class="left">${it.label} (${it.max}점)</td>`;
+            candidates.forEach(c=>{
+              const v = c.scores[i];
+              const pct = Math.round(v/it.max*100);
+              rows += `<td>${v}<span class="bar-wrap"><span class="bar-fill" style="width:${pct}%"></span></span></td>`;
+            });
+            rows += '</tr>';
+          });
+          rows += `<tr style="background:var(--color-background-secondary)"><td class="left" style="font-weight:500">소계</td>`;
+          candidates.forEach(c=>{
+            rows += `<td style="font-weight:500">${secTots(c,sec.key)}</td>`;
+          });
+          rows += '</tr>';
+        });
+
+        rows += `<tr style="border-top:1px solid var(--color-border-secondary)"><td class="left" style="font-weight:500;font-size:13px">총점</td>`;
+        candidates.forEach((c,i)=>{
+          const tot = c.scores.reduce((a,b)=>a+b,0);
+          const badge = i===topIdx?`<span class="top-badge">최고점</span>`:'';
+          rows += `<td style="font-weight:500;font-size:13px">${tot}${badge}</td>`;
+        });
+        rows += '</tr>';
+
+        rows += `<tr><td class="left">판정</td>`;
+        candidates.forEach(c=>{
+          const v = getVerdict(c);
+          const map = {pass:['pill-pass','합격 권고'],review:['pill-review','검토 필요'],fail:['pill-fail','탈락']};
+          rows += `<td><span class="pill ${map[v][0]}">${map[v][1]}</span></td>`;
+        });
+        rows += '</tr>';
+
+        const html = `
+          <div class="matrix-wrap">
+            <table class="matrix-table">
+              <thead>
+                <tr>
+                  <th class="left" style="width:32%">평가 항목</th>
+                  ${candidates.map(c=>`<th>${escapeHtml(c.name)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+
+        document.getElementById('matrix-content').innerHTML = html;
+      }
+
+      function copyShareLink(){
+        const u = new URL(location.href);
+        u.searchParams.set("id", evaluationId);
+        navigator.clipboard.writeText(u.toString()).then(()=>{
+          toast("공유 링크를 클립보드에 복사했어요.");
+        }).catch(()=>{
+          toast("복사에 실패했어요. 주소창 URL을 직접 복사해 주세요.");
+        });
+      }
+
+      async function saveShared(){
+        const btn = document.getElementById("btn-save");
+        btn.disabled = true;
+        try{
+          const payload = { candidates };
+          const name = `${candidates[0]?.name ?? "평가"}`;
+          const res = await fetch("/api/evaluations", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ id: evaluationId, name, payload })
+          });
+          const data = await res.json().catch(()=>({}));
+          if(!res.ok || !data.ok) throw new Error(data.error || "저장 실패");
+          toast("서버에 저장했어요. 이제 다른 접속자도 공유 보기에서 확인할 수 있어요.");
+        }catch(e){
+          toast(`저장 실패: ${String(e?.message ?? e)}`);
+        }finally{
+          btn.disabled = false;
+        }
+      }
+
+      function fmtTime(iso){
+        try{
+          const d = new Date(iso);
+          return d.toLocaleString("ko-KR");
+        }catch(_e){
+          return iso || "";
+        }
+      }
+
+      function summarize(payload){
+        const cs = payload?.candidates || [];
+        const totals = cs.map(c => (c.scores || []).reduce((a,b)=>a+(parseInt(b)||0),0));
+        const best = totals.length ? Math.max(...totals) : 0;
+        return { count: cs.length, best };
+      }
+
+      async function refreshShared(){
+        const status = document.getElementById("shared-status");
+        status.textContent = "불러오는 중…";
+        try{
+          const res = await fetch("/api/evaluations?limit=50");
+          const data = await res.json().catch(()=>({}));
+          if(!res.ok || !data.ok) throw new Error(data.error || "불러오기 실패");
+
+          const rows = data.rows || [];
+          document.getElementById("shared-count").textContent = `${rows.length}건`;
+
+          const list = document.getElementById("shared-list");
+          if(!rows.length){
+            list.innerHTML = `<div class="shared-item"><div class="meta"><div class="name">저장된 평가가 아직 없어요</div><div class="sub">상단의 “서버에 저장”을 눌러 기록을 남겨보세요.</div></div></div>`;
+          }else{
+            list.innerHTML = rows.map(r=>{
+              const s = summarize(r.payload);
+              const url = new URL(location.href);
+              url.searchParams.set("id", r.id);
+              return `
+                <div class="shared-item">
+                  <div class="meta">
+                    <div class="name">${escapeHtml(r.name || "평가")}</div>
+                    <div class="sub">업데이트: ${escapeHtml(fmtTime(r.updated_at))}</div>
+                  </div>
+                  <div class="right">
+                    <div class="kvs">
+                      <span class="kv">지원자 ${s.count}명</span>
+                      <span class="kv">최고점 ${s.best}점</span>
+                    </div>
+                    <button class="btn" onclick="openEval('${r.id}')">열기</button>
+                    <button class="btn" onclick="copyText('${escapeAttr(url.toString())}')">링크</button>
+                  </div>
+                </div>
+              `;
+            }).join("");
+          }
+          status.textContent = `마지막 갱신: ${new Date().toLocaleTimeString("ko-KR")}`;
+        }catch(e){
+          status.textContent = "";
+          toast(`공유 보기 로딩 실패: ${String(e?.message ?? e)}`);
+        }
+      }
+
+      async function openEval(id){
+        try{
+          const res = await fetch(`/api/evaluations/${encodeURIComponent(id)}`);
+          const data = await res.json().catch(()=>({}));
+          if(!res.ok || !data.ok) throw new Error(data.error || "불러오기 실패");
+          const row = data.row;
+          candidates = row.payload?.candidates || candidates;
+          cur = 0;
+          buildCtabs();
+          loadCandidate();
+          const u = new URL(location.href);
+          u.searchParams.set("id", id);
+          history.replaceState(null, "", u);
+          toast("저장된 평가를 불러왔어요.");
+          switchTab("entry");
+        }catch(e){
+          toast(`열기 실패: ${String(e?.message ?? e)}`);
+        }
+      }
+
+      function copyText(t){
+        navigator.clipboard.writeText(t).then(()=>toast("링크를 복사했어요.")).catch(()=>toast("복사 실패"));
+      }
+
+      function escapeHtml(s){
+        return String(s ?? "")
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#39;");
+      }
+      function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#96;"); }
+
+      // init
+      buildCtabs();
+      loadCandidate();
+      // auto load when id exists (works even for fresh loads)
+      (async ()=>{
+        if(qs.get("id")){
+          try{
+            const res = await fetch(`/api/evaluations/${encodeURIComponent(evaluationId)}`);
+            if(res.ok){
+              const data = await res.json().catch(()=>null);
+              if(data?.ok && data?.row?.payload?.candidates){
+                candidates = data.row.payload.candidates;
+                buildCtabs();
+                loadCandidate();
+              }
+            }
+          }catch(_e){}
+        }
+      })();
+    </script>
+  </main>
+</body>
+</html>
+
