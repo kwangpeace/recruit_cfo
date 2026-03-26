@@ -84,6 +84,8 @@
     .tab.active{background:var(--color-background-primary);color:var(--color-text-primary);font-weight:500;border-color:var(--color-border-primary)}
     .panel{display:none;padding:1rem}
     .panel.active{display:block}
+    .matrix-view{display:none}
+    .matrix-view.active{display:block}
     .candidate-tabs{display:flex;gap:4px;margin-bottom:1rem;flex-wrap:wrap}
     .ctab{padding:5px 12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:transparent;cursor:pointer;font-size:12px;color:var(--color-text-secondary)}
     .ctab.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info);font-weight:500}
@@ -322,25 +324,37 @@
     </div>
 
     <div id="matrix" class="panel">
-      <div class="sec" style="margin-bottom:1rem">
-        <div class="sec-head">
-          <span>후보자 비교 차트 (레이더)</span>
-          <span class="pts muted" style="display:flex;gap:8px;align-items:center">
-            <span class="muted">기준</span>
-            <select id="radar-mode" onchange="buildMatrix()" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);">
-              <option value="items">항목별(12개)</option>
-              <option value="sections">섹션별(A/B/C/D)</option>
-            </select>
-          </span>
-        </div>
-        <div style="padding:12px 14px">
-          <canvas id="radar" height="220"></canvas>
-          <div class="muted" style="margin-top:8px;font-size:11px;line-height:1.5">
-            여러 후보자의 점수를 겹쳐서 비교합니다. (색은 자동으로 지정)
+      <div class="actions" style="padding:0 2px; margin:-6px 0 14px; justify-content:flex-start;">
+        <button class="btn" onclick="switchMatrixView('table')">비교 매트릭스(표)</button>
+        <button class="btn" onclick="switchMatrixView('radar')">비교 매트릭스 2(5각형)</button>
+      </div>
+
+      <div id="matrix-view-table" class="matrix-view active">
+        <div id="matrix-content"></div>
+      </div>
+
+      <div id="matrix-view-radar" class="matrix-view">
+        <div class="sec" style="margin-bottom:0;">
+          <div class="sec-head">
+            <span>후보자 비교 차트 (레이더)</span>
+            <span class="pts muted" style="display:flex;gap:8px;align-items:center">
+              <span class="muted">기준</span>
+              <select id="radar-mode" onchange="renderRadar()" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);">
+                <option value="items">항목별(12개)</option>
+                <option value="sections">섹션별(A/B/C/D)</option>
+              </select>
+            </span>
+          </div>
+          <div style="padding:12px 14px">
+            <div style="max-width:760px;margin:0 auto;">
+              <canvas id="radar" height="190"></canvas>
+            </div>
+            <div class="muted" style="margin-top:8px;font-size:11px;line-height:1.5">
+              여러 후보자의 점수를 겹쳐서 비교합니다. (색은 자동으로 지정)
+            </div>
           </div>
         </div>
       </div>
-      <div id="matrix-content"></div>
       <button onclick="switchTab('entry')" class="btn" style="margin-top:1rem;width:100%;">← 점수 입력으로 돌아가기</button>
     </div>
 
@@ -501,6 +515,16 @@
         if(t==='shared') refreshShared();
       }
 
+      let matrixView = "table";
+      function switchMatrixView(v){
+        matrixView = v;
+        const tEl = document.getElementById("matrix-view-table");
+        const rEl = document.getElementById("matrix-view-radar");
+        if(tEl) tEl.classList.toggle("active", v === "table");
+        if(rEl) rEl.classList.toggle("active", v === "radar");
+        if(v === "radar") renderRadar();
+      }
+
       function getVerdict(c){
         const s = c.scores;
         const sa = s[0]+s[1]+s[2];
@@ -578,7 +602,7 @@
           </div>`;
 
         document.getElementById('matrix-content').innerHTML = html;
-        renderRadar();
+        if(matrixView === "radar") renderRadar();
       }
 
       let radarChart = null;
