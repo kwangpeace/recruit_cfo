@@ -240,8 +240,15 @@ async function extractResumeText(file) {
   // pdf
   if (mime.includes("pdf") || name.endsWith(".pdf")) {
     const mod = await import("pdf-parse");
-    const pdfParse = mod?.default ?? mod;
-    if (typeof pdfParse !== "function") throw new Error("pdf-parse is not a function");
+    const pdfParse =
+      (typeof mod === "function" ? mod : null) ||
+      (typeof mod?.default === "function" ? mod.default : null) ||
+      (typeof mod?.default?.default === "function" ? mod.default.default : null) ||
+      (typeof mod?.pdfParse === "function" ? mod.pdfParse : null) ||
+      (typeof mod?.parse === "function" ? mod.parse : null);
+    if (typeof pdfParse !== "function") {
+      throw new Error(`pdf-parse is not a function (exports: ${Object.keys(mod || {}).join(",")})`);
+    }
     const parsed = await pdfParse(file.buffer);
     return parsed?.text || "";
   }
