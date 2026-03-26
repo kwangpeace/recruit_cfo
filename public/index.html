@@ -169,6 +169,11 @@
       <div class="candidate-tabs" id="ctabs"></div>
 
       <input class="cname-input" id="cname" placeholder="지원자 이름 입력" oninput="saveName(this.value)">
+      <div class="actions" style="padding:0 2px; margin:-6px 0 14px;">
+        <button class="btn" onclick="addCandidate()">+ 지원자 추가</button>
+        <button class="btn" onclick="removeCurrentCandidate()">현재 지원자 삭제</button>
+        <span class="muted" style="font-size:12px;align-self:center">현재 <b id="cand-count">0</b>명</span>
+      </div>
 
       <div class="score-box">
         <div class="metric"><div class="lbl">총점</div><div class="val" id="total">0</div><div class="sub">/ 100점</div></div>
@@ -337,7 +342,7 @@
     </div>
 
     <script>
-      const MAX_C = 4;
+      const INITIAL_CANDIDATES = 4;
       const ITEMS = [
         {label:'A1. 재무/회계 경력',sec:'a',max:10},
         {label:'A2. 투자유치/IPO',sec:'a',max:10},
@@ -362,8 +367,8 @@
       }
 
       let cur = 0;
-      let candidates = Array.from({length:MAX_C},(_,i)=>({
-        name: i===0?'지원자 A':i===1?'지원자 B':i===2?'지원자 C':'지원자 D',
+      let candidates = Array.from({length:INITIAL_CANDIDATES},(_,i)=>({
+        name: i===0?'지원자 A':i===1?'지원자 B':i===2?'지원자 C':i===3?'지원자 D':`지원자 ${i+1}`,
         scores: Array(12).fill(0)
       }));
 
@@ -379,6 +384,8 @@
         el.innerHTML = candidates.map((c,i)=>
           `<button class="ctab${i===cur?' active':''}" onclick="switchC(${i})">${escapeHtml(c.name)}</button>`
         ).join('');
+        const cc = document.getElementById("cand-count");
+        if (cc) cc.textContent = String(candidates.length);
       }
 
       function switchC(i){
@@ -387,7 +394,37 @@
         loadCandidate();
       }
 
+      function addCandidate(){
+        const n = candidates.length + 1;
+        candidates.push({
+          name: `지원자 ${n}`,
+          scores: Array(12).fill(0),
+        });
+        cur = candidates.length - 1;
+        buildCtabs();
+        loadCandidate();
+        toast("지원자를 추가했어요.");
+      }
+
+      function removeCurrentCandidate(){
+        if (candidates.length <= 1){
+          toast("최소 1명은 남겨야 해요.");
+          return;
+        }
+        const removed = candidates[cur]?.name || "지원자";
+        candidates.splice(cur, 1);
+        if (cur >= candidates.length) cur = candidates.length - 1;
+        buildCtabs();
+        loadCandidate();
+        toast(`${removed} 삭제 완료`);
+      }
+
       function loadCandidate(){
+        if(!candidates.length){
+          candidates = [{ name: "지원자 1", scores: Array(12).fill(0) }];
+          cur = 0;
+          buildCtabs();
+        }
         document.getElementById('cname').value = candidates[cur].name;
         const selects = document.querySelectorAll('#entry select');
         selects.forEach((s,i)=>{
@@ -457,6 +494,7 @@
       function buildMatrix(){
         const totals = candidates.map(c=>c.scores.reduce((a,b)=>a+b,0));
         const topIdx = totals.indexOf(Math.max(...totals));
+        const COLS = candidates.length;
 
         const secs = [
           {key:'a',label:'A. 필수 자격 요건',max:30},
@@ -473,7 +511,7 @@
         let rows = '';
 
         secs.forEach(sec=>{
-          rows += `<tr><td class="cat" colspan="${MAX_C+1}">${sec.label} (만점 ${sec.max}점)</td></tr>`;
+          rows += `<tr><td class="cat" colspan="${COLS+1}">${sec.label} (만점 ${sec.max}점)</td></tr>`;
           ITEMS.forEach((it,i)=>{
             if(it.sec!==sec.key) return;
             rows += `<tr><td class="left">${it.label} (${it.max}점)</td>`;
