@@ -3,6 +3,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
 import crypto from "crypto";
+import multer from "multer";
+import pdfParse from "pdf-parse";
+import mammoth from "mammoth";
+import https from "https";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -154,7 +158,15 @@ app.use((req, res, next) => {
   if (req.path === "/login" || req.path === "/logout") return next();
   if (isAuthed(req)) return next();
   const nextPath = req.originalUrl || "/";
+  if (String(req.originalUrl || "").startsWith("/api/")) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
   return res.redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
 // Static site
@@ -192,6 +204,247 @@ app.get("/api/health", async (_req, res) => {
     res.status(500).json({ ok: false, error: String(e?.message ?? e) });
   }
 });
+
+function extractJson(text) {
+  if (typeof text !== "string") throw new Error("AI response is not text");
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) throw new Error("JSON not found in AI response");
+  const raw = text.slice(start, end + 1);
+  return JSON.parse(raw);
+}
+
+function nearestAllowed(value, allowed) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return allowed[0];
+  let best = allowed[0];
+  let bestDist = Math.abs(n - best);
+  for (const a of allowed) {
+    const d = Math.abs(n - a);
+    if (d < bestDist) {
+      bestDist = d;
+      best = a;
+    }
+  }
+  return best;
+}
+
+async function extractResumeText(file) {
+  if (!file?.buffer) throw new Error("no resume file");
+  const mime = String(file.mimetype || "");
+  const name = String(file.originalname || file.filename || "").toLowerCase();
+
+  // txt
+  if (mime.includes("text/") || name.endsWith(".txt")) {
+    return file.buffer.toString("utf8");
+  }
+
+  // pdf
+  if (mime.includes("pdf") || name.endsWith(".pdf")) {
+    const parsed = await pdfParse(file.buffer);
+    return parsed?.text || "";
+  }
+
+  // docx
+  if (mime.includes("officedocument.wordprocessingml.document") || name.endsWith(".docx")) {
+    const parsed = await mammoth.extractRawText({ buffer: file.buffer });
+    return parsed?.value || "";
+  }
+
+  // fallback: treat as text
+  return file.buffer.toString("utf8");
+}
+
+async function callGeminiGenerateContent({ apiKey, model, prompt }) {
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 400
+    }
+  };
+
+  const data = await new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const payload = JSON.stringify(body);
+    const req = https.request(
+      {
+        method: "POST",
+        hostname: u.hostname,
+        path: u.pathname + u.search,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload)
+        }
+      },
+      (resp) => {
+        let raw = "";
+        resp.on("data", (chunk) => {
+          raw += chunk;
+        });
+        resp.on("end", () => {
+          try {
+            resolve(JSON.parse(raw || "{}"));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+
+  const respOk = true;
+  // status code가 node https 응답에서 자동으로 전달되지 않으므로, 실패는 data/구조로 판단합니다.
+  // (Gemini는 보통 error 객체를 내려줍니다.)
+  if (data?.error) {
+    throw new Error(String(data?.error?.message || data?.error));
+  }
+  const text =
+    data?.candidates?.[0]?.content?.parts?.map((p) => p?.text).join("") ||
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    JSON.stringify(data);
+
+  return { text, data };
+}
+
+const GEMINI_ITEMS = [
+  {
+    key: "A1",
+    label: "A1. 재무/회계 경력 연수",
+    allowed: [0, 4, 7, 10],
+    mapping: "10=20년+ & 스타트업 CFO / 7=15~19년 & 스타트업 재무총괄 / 4=15년+ 대기업 재무 / 0=15년 미만"
+  },
+  {
+    key: "A2",
+    label: "A2. 대규모 투자유치 / IPO 실적",
+    allowed: [0, 3, 7, 10],
+    mapping: "10=Series B+ & IPO 모두 / 7=Series B+ 직접 리딩 / 3=Series A 또는 참여 / 0=해당 없음"
+  },
+  {
+    key: "A3",
+    label: "A3. AI / SaaS 비즈니스 이해도",
+    allowed: [0, 3, 6, 10],
+    mapping: "10=AI/SaaS CFO 직접 경험 / 6=테크 스타트업 재무 경험 / 3=IT 인접 / 0=전무"
+  },
+  {
+    key: "B1",
+    label: "B1. IR 전략 수립 및 실행력",
+    allowed: [0, 3, 6, 10],
+    mapping: "10=후속 라운드 전략·실행 직접 / 6=IR 자료·투자자 미팅 / 3=IR 지원 수준 / 0=없음"
+  },
+  {
+    key: "B2",
+    label: "B2. 재무계획 & 캐시플로우 관리",
+    allowed: [0, 2, 6, 10],
+    mapping: "10=Burn rate·런웨이 직접 통제 / 6=예산 수립·관리 / 2=분석 보조 / 0=없음"
+  },
+  {
+    key: "B3",
+    label: "B3. 내부 통제 & 거버넌스 구축",
+    allowed: [0, 2, 6, 10],
+    mapping: "10=IPO 대비 시스템 직접 구축 / 6=내부통제 개선 리딩 / 2=감사 대응 참여 / 0=없음"
+  },
+  {
+    key: "B4",
+    label: "B4. VC·PE·금융권 네트워크",
+    allowed: [0, 2, 6, 10],
+    mapping: "10=Top-tier VC/PE 다수 직접 / 6=국내 주요 VC / 2=금융권 일반 / 0=없음"
+  },
+  {
+    key: "C1",
+    label: "C1. 글로벌 확장 경험",
+    allowed: [0, 4, 8],
+    mapping: "8=해외 법인 설립·운영 리딩 / 4=해외 법인 재무 관리 참여 / 0=없음"
+  },
+  {
+    key: "C2",
+    label: "C2. 기술 특례 상장 프로세스 리딩",
+    allowed: [0, 4, 7],
+    mapping: "7=기술 특례 상장 직접 리딩 / 4=일반 IPO 직접 리딩 / 0=없음"
+  },
+  {
+    key: "C3",
+    label: "C3. MBA / CPA 자격증",
+    allowed: [0, 3, 5],
+    mapping: "5=MBA+CPA / 3=둘 중 하나 / 0=없음"
+  },
+  {
+    key: "D1",
+    label: "D1. 스타트업 환경 적응력",
+    allowed: [0, 1, 3, 5],
+    mapping: "5=스타트업 창업·초기 멤버 / 3=스타트업 임원 / 1=대기업 경험만 / 0=없음"
+  },
+  {
+    key: "D2",
+    label: "D2. CEO 협업·데이터 기반 의사결정",
+    allowed: [0, 1, 3, 5],
+    mapping: "5=CEO 직접 보좌·사업성 분석 리딩 / 3=C-level 협업 / 1=간접 참여 / 0=없음"
+  }
+];
+
+app.post(
+  "/api/gemini/evaluate",
+  upload.single("resume"),
+  async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+      const file = req.file;
+      if (!file) return res.status(400).json({ ok: false, error: "resume file is required" });
+
+      const resumeTextRaw = await extractResumeText(file);
+      const resumeText = String(resumeTextRaw || "").slice(0, 12000);
+      const candidateName = String(req.body?.candidateName || "").slice(0, 80);
+
+      const itemsText = GEMINI_ITEMS.map((it, idx) => {
+        return `${idx + 1}) ${it.label}\n- allowed: ${JSON.stringify(it.allowed)}\n- 기준: ${it.mapping}`;
+      }).join("\n\n");
+
+      const prompt = `너는 채용 평가 도우미야. 아래 이력서 내용만 근거로, CFO 후보자 점수를 평가해줘.
+
+반드시 아래 12개 항목에 대해 각 점수를 지정하고, 점수는 allowed 값 중 하나만 선택해.
+이력서에 정보가 부족하면 "가장 보수적으로" 낮은 점수를 선택해.
+
+${itemsText}
+
+평가 결과는 반드시 JSON만 출력해. 다른 글 금지.
+형식:
+{
+  "scores": [A1, A2, A3, B1, B2, B3, B4, C1, C2, C3, D1, D2]
+}
+
+이력서(이름: ${candidateName || "알수없음"}):
+${resumeText}`;
+
+      const { text } = await callGeminiGenerateContent({ apiKey, model, prompt });
+      const parsed = extractJson(text);
+      const scoresRaw = parsed?.scores;
+      if (!Array.isArray(scoresRaw) || scoresRaw.length !== 12) {
+        throw new Error("AI returned invalid scores array");
+      }
+
+      const scores = scoresRaw.map((v, i) => {
+        const allowed = GEMINI_ITEMS[i]?.allowed || [];
+        return allowed.includes(v) ? v : nearestAllowed(v, allowed);
+      });
+
+      return res.json({ ok: true, scores, modelText: text.slice(0, 800) });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: String(e?.message ?? e) });
+    }
+  }
+);
 
 // Save or update evaluation (shared)
 app.post("/api/evaluations", async (req, res) => {

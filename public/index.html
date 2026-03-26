@@ -184,10 +184,16 @@
         <input id="interviewer-name" class="cname-input" style="max-width:180px;margin:0;" placeholder="면접관 이름 입력">
         <button class="btn" onclick="saveInterviewerName()">이름 저장</button>
         <button class="btn" onclick="addInterviewer()">+ 면접관 추가</button>
+        <button class="btn" onclick="addGeminiInterviewer()">+ Gemini 추가</button>
         <button class="btn" onclick="removeCurrentInterviewer()">현재 면접관 삭제</button>
         <span class="muted" style="font-size:12px;align-self:center;">현재 <b id="interviewer-count">0</b>명</span>
       </div>
       <div class="muted" id="eval-context" style="font-size:12px; margin:-6px 2px 12px;">
+      </div>
+      <div class="actions" style="padding:0 2px; margin:-6px 0 14px; justify-content:flex-start;gap:10px;flex-wrap:wrap;">
+        <input id="resume-file" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="max-width:360px;flex:1;font-size:12px;">
+        <button class="btn primary" onclick="runGeminiEvaluation()">Gemini로 자동채점</button>
+        <span class="muted" id="ai-status" style="font-size:12px;align-self:center;"></span>
       </div>
 
       <div class="score-box">
@@ -408,7 +414,7 @@
       }
 
       let cur = 0;
-      let interviewers = [{ name: "면접관 1" }];
+      let interviewers = [{ name: "면접관 1", type: "human" }];
       let currentInterviewerIndex = 0;
 
       function emptyScores() {
@@ -483,7 +489,7 @@
 
       function addInterviewer(){
         const n = interviewers.length + 1;
-        interviewers.push({ name: `면접관 ${n}` });
+        interviewers.push({ name: `면접관 ${n}`, type: "human" });
         candidates.forEach(c => {
           if(!Array.isArray(c.scoresByInterviewer)) c.scoresByInterviewer = [];
           c.scoresByInterviewer.push(emptyScores());
@@ -526,6 +532,71 @@
         buildCtabs();
         loadCandidate();
         toast("지원자를 추가했어요.");
+      }
+
+      function addGeminiInterviewer(){
+        interviewers.push({ name: "Gemini", type: "gemini" });
+        candidates.forEach(c => {
+          if(!Array.isArray(c.scoresByInterviewer)) c.scoresByInterviewer = [];
+          c.scoresByInterviewer.push(emptyScores());
+        });
+        currentInterviewerIndex = interviewers.length - 1;
+        buildInterviewerSelect();
+        refreshEvalContext();
+        loadCandidate();
+        toast("Gemini 면접관이 추가됐어요. (이름은 변경 가능)");
+      }
+
+      async function runGeminiEvaluation(){
+        const status = document.getElementById("ai-status");
+        const fileInput = document.getElementById("resume-file");
+        const file = fileInput?.files?.[0];
+
+        if(!file){
+          toast("이력서 파일을 먼저 선택하세요.");
+          return;
+        }
+        const iv = interviewers[currentInterviewerIndex];
+        if(!iv || iv.type !== "gemini"){
+          toast("Gemini 면접관을 선택한 뒤 진행하세요.");
+          return;
+        }
+        const c = candidates[cur];
+        if(!c){
+          toast("지원자를 먼저 선택하세요.");
+          return;
+        }
+        if(!Array.isArray(c.scoresByInterviewer)){
+          c.scoresByInterviewer = interviewers.map(() => emptyScores());
+        }
+
+        status.textContent = "Gemini 평가 중…";
+        try{
+          const formData = new FormData();
+          formData.append("resume", file, file.name);
+
+          // 서버에서 후보자 이름/정보를 프롬프트에 참고용으로 넣기만 합니다.
+          formData.append("candidateName", c.name || "지원자");
+          formData.append("interviewerName", iv.name || "Gemini");
+
+          const res = await fetch("/api/gemini/evaluate", {
+            method: "POST",
+            body: formData
+          });
+          const data = await res.json().catch(()=>null);
+          if(!res.ok || !data?.ok) throw new Error(data?.error || "Gemini 평가 실패");
+          const scores = data?.scores;
+          if(!Array.isArray(scores) || scores.length !== 12) throw new Error("응답 형식이 올바르지 않습니다.");
+
+          c.scoresByInterviewer[currentInterviewerIndex] = scores.map(v => parseInt(v, 10) || 0);
+          toast("Gemini 자동평가가 완료됐어요.");
+          loadCandidate();
+          refreshEvalContext();
+          status.textContent = "";
+        }catch(e){
+          status.textContent = "";
+          toast(`Gemini 평가 실패: ${String(e?.message ?? e)}`);
+        }
       }
 
       function removeCurrentCandidate(){
@@ -928,7 +999,10 @@
           const nextInterviewers = Array.isArray(payload.interviewers) && payload.interviewers.length
             ? payload.interviewers
             : [{ name: "면접관 1" }];
-          interviewers = nextInterviewers.map((it, i) => ({ name: it?.name || `면접관 ${i+1}` }));
+          interviewers = nextInterviewers.map((it, i) => ({
+            name: it?.name || `면접관 ${i+1}`,
+            type: it?.type || "human",
+          }));
 
           const nextCandidatesRaw = Array.isArray(payload.candidates) ? payload.candidates : [];
           candidates = nextCandidatesRaw.map(normalizeCandidate);
@@ -978,7 +1052,10 @@
                 const nextInterviewers = Array.isArray(payload.interviewers) && payload.interviewers.length
                   ? payload.interviewers
                   : [{ name: "면접관 1" }];
-                interviewers = nextInterviewers.map((it, i) => ({ name: it?.name || `면접관 ${i+1}` }));
+                interviewers = nextInterviewers.map((it, i) => ({
+                  name: it?.name || `면접관 ${i+1}`,
+                  type: it?.type || "human",
+                }));
 
                 const nextCandidatesRaw = Array.isArray(payload.candidates) ? payload.candidates : [];
                 candidates = nextCandidatesRaw.map(normalizeCandidate);
