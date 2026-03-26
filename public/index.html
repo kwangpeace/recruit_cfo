@@ -144,6 +144,7 @@
     .kvs{display:flex;gap:8px;flex-wrap:wrap}
     .kv{font-size:11px;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);padding:5px 8px;border-radius:999px}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <main class="app">
@@ -321,6 +322,24 @@
     </div>
 
     <div id="matrix" class="panel">
+      <div class="sec" style="margin-bottom:1rem">
+        <div class="sec-head">
+          <span>후보자 비교 차트 (레이더)</span>
+          <span class="pts muted" style="display:flex;gap:8px;align-items:center">
+            <span class="muted">기준</span>
+            <select id="radar-mode" onchange="buildMatrix()" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);">
+              <option value="items">항목별(12개)</option>
+              <option value="sections">섹션별(A/B/C/D)</option>
+            </select>
+          </span>
+        </div>
+        <div style="padding:12px 14px">
+          <canvas id="radar" height="220"></canvas>
+          <div class="muted" style="margin-top:8px;font-size:11px;line-height:1.5">
+            여러 후보자의 점수를 겹쳐서 비교합니다. (색은 자동으로 지정)
+          </div>
+        </div>
+      </div>
       <div id="matrix-content"></div>
       <button onclick="switchTab('entry')" class="btn" style="margin-top:1rem;width:100%;">← 점수 입력으로 돌아가기</button>
     </div>
@@ -559,6 +578,98 @@
           </div>`;
 
         document.getElementById('matrix-content').innerHTML = html;
+        renderRadar();
+      }
+
+      let radarChart = null;
+      function radarLabelsAndValues(mode, c){
+        if(mode === "sections"){
+          const s = c.scores;
+          const sa = s[0]+s[1]+s[2];
+          const sb = s[3]+s[4]+s[5]+s[6];
+          const sc = s[7]+s[8]+s[9];
+          const sd = s[10]+s[11];
+          return {
+            labels: ["A(필수)", "B(직무)", "C(우대)", "D(문화)"],
+            values: [sa, sb, sc, sd],
+            max: 40
+          };
+        }
+        // items (default)
+        return {
+          labels: ITEMS.map(it => it.label.replaceAll(" ", "")),
+          values: c.scores.map(v => parseInt(v) || 0),
+          max: 10
+        };
+      }
+
+      function radarColor(i){
+        const palette = [
+          ["#3B82F6", "rgba(59,130,246,.18)"],
+          ["#EF4444", "rgba(239,68,68,.16)"],
+          ["#10B981", "rgba(16,185,129,.16)"],
+          ["#F59E0B", "rgba(245,158,11,.16)"],
+          ["#8B5CF6", "rgba(139,92,246,.16)"],
+          ["#06B6D4", "rgba(6,182,212,.16)"],
+          ["#EC4899", "rgba(236,72,153,.14)"],
+          ["#84CC16", "rgba(132,204,22,.14)"],
+        ];
+        return palette[i % palette.length];
+      }
+
+      function renderRadar(){
+        const canvas = document.getElementById("radar");
+        if(!canvas || typeof Chart === "undefined") return;
+
+        const modeSel = document.getElementById("radar-mode");
+        const mode = modeSel?.value || "items";
+
+        const base = radarLabelsAndValues(mode, candidates[0] || { scores: Array(12).fill(0) });
+        const labels = base.labels;
+        const max = mode === "sections" ? 40 : 10;
+
+        const datasets = candidates.map((c, i) => {
+          const lv = radarLabelsAndValues(mode, c);
+          const [border, bg] = radarColor(i);
+          return {
+            label: c.name || `지원자 ${i+1}`,
+            data: lv.values,
+            borderColor: border,
+            backgroundColor: bg,
+            pointBackgroundColor: border,
+            pointRadius: 2.5,
+            borderWidth: 2,
+          };
+        });
+
+        if(radarChart){
+          radarChart.destroy();
+          radarChart = null;
+        }
+
+        radarChart = new Chart(canvas, {
+          type: "radar",
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: "top", labels: { boxWidth: 10, boxHeight: 10, padding: 12, font: { size: 11 } } },
+              tooltip: { enabled: true }
+            },
+            elements: { line: { tension: 0.15 } },
+            scales: {
+              r: {
+                beginAtZero: true,
+                suggestedMax: max,
+                ticks: { stepSize: mode === "sections" ? 10 : 2, showLabelBackdrop: false, color: "#6B7280", font: { size: 10 } },
+                grid: { color: "rgba(148,163,184,.25)" },
+                angleLines: { color: "rgba(148,163,184,.25)" },
+                pointLabels: { color: "#111827", font: { size: 10 } },
+              }
+            }
+          }
+        });
       }
 
       function copyShareLink(){
