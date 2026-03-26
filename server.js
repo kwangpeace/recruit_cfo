@@ -4,8 +4,6 @@ import { fileURLToPath } from "url";
 import pg from "pg";
 import crypto from "crypto";
 import multer from "multer";
-import pdfParse from "pdf-parse";
-import mammoth from "mammoth";
 import https from "https";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -241,12 +239,18 @@ async function extractResumeText(file) {
 
   // pdf
   if (mime.includes("pdf") || name.endsWith(".pdf")) {
+    const mod = await import("pdf-parse");
+    const pdfParse = mod?.default ?? mod;
+    if (typeof pdfParse !== "function") throw new Error("pdf-parse is not a function");
     const parsed = await pdfParse(file.buffer);
     return parsed?.text || "";
   }
 
   // docx
   if (mime.includes("officedocument.wordprocessingml.document") || name.endsWith(".docx")) {
+    const mod = await import("mammoth");
+    const mammoth = mod?.default ?? mod;
+    if (!mammoth?.extractRawText) throw new Error("mammoth.extractRawText not found");
     const parsed = await mammoth.extractRawText({ buffer: file.buffer });
     return parsed?.value || "";
   }
