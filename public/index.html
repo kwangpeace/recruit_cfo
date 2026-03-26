@@ -145,6 +145,31 @@
     .shared-item .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
     .kvs{display:flex;gap:8px;flex-wrap:wrap}
     .kv{font-size:11px;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);padding:5px 8px;border-radius:999px}
+    .workflow{
+      display:grid;
+      gap:12px;
+      margin-top:10px;
+    }
+    .wf-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 14px;
+      background:var(--color-background-secondary);
+      border-bottom:0.5px solid var(--color-border-tertiary);
+    }
+    .wf-head .step{
+      font-size:12px;
+      font-weight:650;
+      color:var(--color-text-primary);
+      letter-spacing:-0.1px;
+    }
+    .wf-head .desc{font-size:11px;color:var(--color-text-secondary)}
+    .wf-body{padding:12px 14px}
+    .inline{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .inline .grow{flex:1;min-width:220px}
+    .tag{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--color-background-info);border:0.5px solid var(--color-border-info);color:var(--color-text-info)}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -169,31 +194,69 @@
     </div>
 
     <div id="entry" class="panel active">
-      <div class="candidate-tabs" id="ctabs"></div>
+      <div class="workflow">
+        <div class="sec" style="margin-bottom:0;">
+          <div class="wf-head">
+            <div>
+              <div class="step">1) 지원자 선택/추가</div>
+              <div class="desc">먼저 평가할 후보자를 고르고 이름을 정리하세요.</div>
+            </div>
+            <span class="tag">필수</span>
+          </div>
+          <div class="wf-body">
+            <div class="candidate-tabs" id="ctabs"></div>
+            <div class="inline" style="margin-top:10px;">
+              <input class="cname-input grow" id="cname" placeholder="지원자 이름 입력" oninput="saveName(this.value)" style="margin:0;">
+              <button class="btn" onclick="addCandidate()">+ 지원자 추가</button>
+              <button class="btn" onclick="removeCurrentCandidate()">현재 지원자 삭제</button>
+              <span class="muted" style="font-size:12px;align-self:center">현재 <b id="cand-count">0</b>명</span>
+            </div>
+          </div>
+        </div>
 
-      <input class="cname-input" id="cname" placeholder="지원자 이름 입력" oninput="saveName(this.value)">
-      <div class="actions" style="padding:0 2px; margin:-6px 0 14px;">
-        <button class="btn" onclick="addCandidate()">+ 지원자 추가</button>
-        <button class="btn" onclick="removeCurrentCandidate()">현재 지원자 삭제</button>
-        <span class="muted" style="font-size:12px;align-self:center">현재 <b id="cand-count">0</b>명</span>
-      </div>
-      <div class="actions" style="padding:0 2px; margin:-12px 0 14px; justify-content:flex-start;gap:10px;">
-        <span class="muted" style="font-size:12px;align-self:center;white-space:nowrap;">면접관</span>
-        <select id="interviewer" onchange="switchInterviewer()" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);">
-        </select>
-        <input id="interviewer-name" class="cname-input" style="max-width:180px;margin:0;" placeholder="면접관 이름 입력">
-        <button class="btn" onclick="saveInterviewerName()">이름 저장</button>
-        <button class="btn" onclick="addInterviewer()">+ 면접관 추가</button>
-        <button class="btn" onclick="addGeminiInterviewer()">+ Gemini 추가</button>
-        <button class="btn" onclick="removeCurrentInterviewer()">현재 면접관 삭제</button>
-        <span class="muted" style="font-size:12px;align-self:center;">현재 <b id="interviewer-count">0</b>명</span>
-      </div>
-      <div class="muted" id="eval-context" style="font-size:12px; margin:-6px 2px 12px;">
-      </div>
-      <div class="actions" style="padding:0 2px; margin:-6px 0 14px; justify-content:flex-start;gap:10px;flex-wrap:wrap;">
-        <input id="resume-file" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="max-width:360px;flex:1;font-size:12px;">
-        <button class="btn primary" onclick="runGeminiEvaluation()">Gemini로 자동채점</button>
-        <span class="muted" id="ai-status" style="font-size:12px;align-self:center;"></span>
+        <div class="sec" style="margin-bottom:0;">
+          <div class="wf-head">
+            <div>
+              <div class="step">2) Gemini 자동평가 (고정)</div>
+              <div class="desc">이력서를 올리면 Gemini가 12개 항목을 채우고, 이후 평균 계산에 반영됩니다.</div>
+            </div>
+            <span class="tag">먼저 실행</span>
+          </div>
+          <div class="wf-body">
+            <div class="inline">
+              <input id="resume-file" class="grow" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="font-size:12px;">
+              <button class="btn primary" onclick="runGeminiEvaluation()">Gemini로 자동채점</button>
+              <span class="muted" id="ai-status" style="font-size:12px;align-self:center;"></span>
+            </div>
+            <div class="muted" style="margin-top:8px;font-size:12px;">
+              참고: <b>.doc</b>(구형 워드)는 지원하지 않습니다. PDF/DOCX/TXT로 업로드하세요.
+            </div>
+          </div>
+        </div>
+
+        <div class="sec" style="margin-bottom:0;">
+          <div class="wf-head">
+            <div>
+              <div class="step">3) 내 평가(면접관)</div>
+              <div class="desc">면접관을 선택하고 항목별 점수를 입력하세요. (Gemini + 면접관 평균이 최종 점수)</div>
+            </div>
+            <span class="tag">선택</span>
+          </div>
+          <div class="wf-body">
+            <div class="inline">
+              <span class="muted" style="font-size:12px;align-self:center;white-space:nowrap;">면접관</span>
+              <select id="interviewer" onchange="switchInterviewer()" style="font-size:12px;padding:6px 10px;border-radius:10px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);min-width:220px;">
+              </select>
+              <input id="interviewer-name" class="cname-input" style="max-width:220px;margin:0;" placeholder="면접관 이름 입력">
+              <button class="btn" onclick="saveInterviewerName()">이름 저장</button>
+              <button class="btn" onclick="addInterviewer()">+ 면접관 추가</button>
+              <button class="btn" onclick="removeCurrentInterviewer()">현재 면접관 삭제</button>
+              <span class="muted" style="font-size:12px;align-self:center;">현재 <b id="interviewer-count">0</b>명</span>
+            </div>
+            <div class="muted" id="eval-context" style="font-size:12px; margin:10px 2px 0;">
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="score-box">
@@ -414,7 +477,11 @@
       }
 
       let cur = 0;
-      let interviewers = [{ name: "면접관 1", type: "human" }];
+      // Gemini 평가는 기본(고정)으로 포함됩니다.
+      let interviewers = [
+        { name: "Gemini", type: "gemini" },
+        { name: "면접관 1", type: "human" },
+      ];
       let currentInterviewerIndex = 0;
 
       function emptyScores() {
@@ -452,13 +519,23 @@
       function buildInterviewerSelect(){
         const el = document.getElementById("interviewer");
         if(!el) return;
-        el.innerHTML = interviewers.map((it, i) =>
-          `<option value="${i}"${i===currentInterviewerIndex?' selected':''}>${escapeHtml(it.name || `면접관 ${i+1}`)}</option>`
+        el.innerHTML = interviewers.map((it, i) => {
+          const base = it?.name || (it?.type === "gemini" ? "Gemini" : `면접관 ${i+1}`);
+          const label = it?.type === "gemini" ? `${base} (AI)` : base;
+          return `<option value="${i}"${i===currentInterviewerIndex?' selected':''}>${escapeHtml(label)}</option>`;
+        }
         ).join("");
         const ic = document.getElementById("interviewer-count");
         if(ic) ic.textContent = String(interviewers.length);
         const nameInput = document.getElementById("interviewer-name");
-        if(nameInput) nameInput.value = interviewers[currentInterviewerIndex]?.name || "";
+        const curIv = interviewers[currentInterviewerIndex];
+        if(nameInput){
+          nameInput.value = curIv?.name || "";
+          const locked = curIv?.type === "gemini";
+          nameInput.disabled = !!locked;
+          nameInput.placeholder = locked ? "Gemini는 고정" : "면접관 이름 입력";
+          nameInput.style.opacity = locked ? "0.7" : "1";
+        }
       }
 
       function refreshEvalContext(){
@@ -470,6 +547,11 @@
       }
 
       function saveInterviewerName(){
+        const curIv = interviewers[currentInterviewerIndex];
+        if(curIv?.type === "gemini"){
+          toast("Gemini 면접관은 고정입니다.");
+          return;
+        }
         const nameInput = document.getElementById("interviewer-name");
         const raw = (nameInput?.value || "").trim();
         interviewers[currentInterviewerIndex].name = raw || `면접관 ${currentInterviewerIndex+1}`;
@@ -502,7 +584,13 @@
       }
 
       function removeCurrentInterviewer(){
-        if(interviewers.length <= 1){
+        const curIv = interviewers[currentInterviewerIndex];
+        if(curIv?.type === "gemini"){
+          toast("Gemini 면접관은 삭제할 수 없어요.");
+          return;
+        }
+        const humanCount = interviewers.filter(iv => iv.type !== "gemini").length;
+        if(humanCount <= 1){
           toast("면접관은 최소 1명은 남겨야 해요.");
           return;
         }
@@ -534,19 +622,6 @@
         toast("지원자를 추가했어요.");
       }
 
-      function addGeminiInterviewer(){
-        interviewers.push({ name: "Gemini", type: "gemini" });
-        candidates.forEach(c => {
-          if(!Array.isArray(c.scoresByInterviewer)) c.scoresByInterviewer = [];
-          c.scoresByInterviewer.push(emptyScores());
-        });
-        currentInterviewerIndex = interviewers.length - 1;
-        buildInterviewerSelect();
-        refreshEvalContext();
-        loadCandidate();
-        toast("Gemini 면접관이 추가됐어요. (이름은 변경 가능)");
-      }
-
       async function runGeminiEvaluation(){
         const status = document.getElementById("ai-status");
         const fileInput = document.getElementById("resume-file");
@@ -556,9 +631,9 @@
           toast("이력서 파일을 먼저 선택하세요.");
           return;
         }
-        const iv = interviewers[currentInterviewerIndex];
-        if(!iv || iv.type !== "gemini"){
-          toast("Gemini 면접관을 선택한 뒤 진행하세요.");
+        const geminiIndex = interviewers.findIndex(iv => iv?.type === "gemini");
+        if(geminiIndex < 0){
+          toast("Gemini 면접관이 없습니다.");
           return;
         }
         const c = candidates[cur];
@@ -569,6 +644,9 @@
         if(!Array.isArray(c.scoresByInterviewer)){
           c.scoresByInterviewer = interviewers.map(() => emptyScores());
         }
+        while(c.scoresByInterviewer.length < interviewers.length){
+          c.scoresByInterviewer.push(emptyScores());
+        }
 
         status.textContent = "Gemini 평가 중…";
         try{
@@ -577,7 +655,7 @@
 
           // 서버에서 후보자 이름/정보를 프롬프트에 참고용으로 넣기만 합니다.
           formData.append("candidateName", c.name || "지원자");
-          formData.append("interviewerName", iv.name || "Gemini");
+          formData.append("interviewerName", interviewers[geminiIndex]?.name || "Gemini");
 
           const res = await fetch("/api/gemini/evaluate", {
             method: "POST",
@@ -591,10 +669,15 @@
           const scores = data?.scores;
           if(!Array.isArray(scores) || scores.length !== 12) throw new Error("응답 형식이 올바르지 않습니다.");
 
-          c.scoresByInterviewer[currentInterviewerIndex] = scores.map(v => parseInt(v, 10) || 0);
+          c.scoresByInterviewer[geminiIndex] = scores.map(v => parseInt(v, 10) || 0);
           toast("Gemini 자동평가가 완료됐어요.");
+          // 다음 단계로 자연스럽게: 첫 번째 사람 면접관으로 이동
+          const firstHuman = interviewers.findIndex(iv => iv?.type !== "gemini");
+          if(firstHuman >= 0){
+            currentInterviewerIndex = firstHuman;
+          }
+          buildInterviewerSelect();
           loadCandidate();
-          refreshEvalContext();
           status.textContent = "";
         }catch(e){
           const msg = String(e?.message ?? e);
