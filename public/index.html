@@ -181,9 +181,13 @@
         <span class="muted" style="font-size:12px;align-self:center;white-space:nowrap;">면접관</span>
         <select id="interviewer" onchange="switchInterviewer()" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);">
         </select>
+        <input id="interviewer-name" class="cname-input" style="max-width:180px;margin:0;" placeholder="면접관 이름 입력">
+        <button class="btn" onclick="saveInterviewerName()">이름 저장</button>
         <button class="btn" onclick="addInterviewer()">+ 면접관 추가</button>
         <button class="btn" onclick="removeCurrentInterviewer()">현재 면접관 삭제</button>
         <span class="muted" style="font-size:12px;align-self:center;">현재 <b id="interviewer-count">0</b>명</span>
+      </div>
+      <div class="muted" id="eval-context" style="font-size:12px; margin:-6px 2px 12px;">
       </div>
 
       <div class="score-box">
@@ -346,16 +350,12 @@
           <div class="sec-head">
             <span>후보자 비교 차트 (레이더)</span>
             <span class="pts muted" style="display:flex;gap:8px;align-items:center">
-              <span class="muted">기준</span>
-              <select id="radar-mode" onchange="renderRadar()" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);">
-                <option value="items">항목별(12개)</option>
-                <option value="sections">섹션별(A/B/C/D)</option>
-              </select>
+              <span class="muted">기준: A/B/C/D 4개 축</span>
             </span>
           </div>
           <div style="padding:12px 14px">
-            <div style="max-width:760px;margin:0 auto;">
-              <canvas id="radar" height="190"></canvas>
+            <div style="max-width:1280px;margin:0 auto;">
+              <canvas id="radar" height="420"></canvas>
             </div>
             <div class="muted" style="margin-top:8px;font-size:11px;line-height:1.5">
               여러 후보자의 점수를 겹쳐서 비교합니다. (색은 자동으로 지정)
@@ -439,6 +439,7 @@
       function switchC(i){
         cur = i;
         buildCtabs();
+        refreshEvalContext();
         loadCandidate();
       }
 
@@ -450,12 +451,33 @@
         ).join("");
         const ic = document.getElementById("interviewer-count");
         if(ic) ic.textContent = String(interviewers.length);
+        const nameInput = document.getElementById("interviewer-name");
+        if(nameInput) nameInput.value = interviewers[currentInterviewerIndex]?.name || "";
+      }
+
+      function refreshEvalContext(){
+        const el = document.getElementById("eval-context");
+        if(!el) return;
+        const iv = interviewers[currentInterviewerIndex]?.name || `면접관 ${currentInterviewerIndex+1}`;
+        const cv = candidates[cur]?.name || `지원자 ${cur+1}`;
+        el.textContent = `현재 입력 대상: ${iv} → ${cv}`;
+      }
+
+      function saveInterviewerName(){
+        const nameInput = document.getElementById("interviewer-name");
+        const raw = (nameInput?.value || "").trim();
+        interviewers[currentInterviewerIndex].name = raw || `면접관 ${currentInterviewerIndex+1}`;
+        buildInterviewerSelect();
+        refreshEvalContext();
+        toast("면접관 이름을 저장했어요.");
       }
 
       function switchInterviewer(){
         const el = document.getElementById("interviewer");
         const v = el ? parseInt(el.value, 10) : 0;
         currentInterviewerIndex = Number.isFinite(v) ? v : 0;
+        buildInterviewerSelect();
+        refreshEvalContext();
         loadCandidate();
       }
 
@@ -468,6 +490,7 @@
         });
         currentInterviewerIndex = interviewers.length - 1;
         buildInterviewerSelect();
+        refreshEvalContext();
         loadCandidate();
         toast("면접관을 추가했어요.");
       }
@@ -488,6 +511,7 @@
           currentInterviewerIndex = interviewers.length - 1;
         }
         buildInterviewerSelect();
+        refreshEvalContext();
         loadCandidate();
         toast(`${removed} 삭제 완료`);
       }
@@ -523,6 +547,7 @@
           cur = 0;
           buildCtabs();
         }
+        refreshEvalContext();
         document.getElementById('cname').value = candidates[cur].name;
         const selects = document.querySelectorAll('#entry select[onchange^="score("]');
         selects.forEach((s,i)=>{
@@ -536,6 +561,7 @@
       function saveName(v){
         candidates[cur].name = v || ('지원자'+(cur+1));
         buildCtabs();
+        refreshEvalContext();
       }
 
       function score(idx, val){
@@ -722,24 +748,16 @@
       }
 
       let radarChart = null;
-      function radarLabelsAndValues(mode, c){
-        if(mode === "sections"){
-          const s = avgScoresOfCandidate(c || {});
-          const sa = s[0]+s[1]+s[2];
-          const sb = s[3]+s[4]+s[5]+s[6];
-          const sc = s[7]+s[8]+s[9];
-          const sd = s[10]+s[11];
-          return {
-            labels: ["A(필수)", "B(직무)", "C(우대)", "D(문화)"],
-            values: [sa, sb, sc, sd],
-            max: 40
-          };
-        }
-        // items (default)
+      function radarLabelsAndValues(c){
+        const s = avgScoresOfCandidate(c || {});
+        const sa = s[0]+s[1]+s[2];
+        const sb = s[3]+s[4]+s[5]+s[6];
+        const sc = s[7]+s[8]+s[9];
+        const sd = s[10]+s[11];
         return {
-          labels: ITEMS.map(it => it.label.replaceAll(" ", "")),
-          values: avgScoresOfCandidate(c || {}).map(v => parseFloat(v) || 0),
-          max: 10
+          labels: ["A. 필수 (30)", "B. 직무 (40)", "C. 우대 (20)", "D. 문화 (10)"],
+          values: [sa, sb, sc, sd],
+          max: 40
         };
       }
 
@@ -761,15 +779,12 @@
         const canvas = document.getElementById("radar");
         if(!canvas || typeof Chart === "undefined") return;
 
-        const modeSel = document.getElementById("radar-mode");
-        const mode = modeSel?.value || "items";
-
-        const base = radarLabelsAndValues(mode, candidates[0] || { scores: Array(12).fill(0) });
+        const base = radarLabelsAndValues(candidates[0] || {});
         const labels = base.labels;
-        const max = mode === "sections" ? 40 : 10;
+        const max = base.max;
 
         const datasets = candidates.map((c, i) => {
-          const lv = radarLabelsAndValues(mode, c);
+          const lv = radarLabelsAndValues(c);
           const [border, bg] = radarColor(i);
           return {
             label: c.name || `지원자 ${i+1}`,
@@ -802,10 +817,10 @@
               r: {
                 beginAtZero: true,
                 suggestedMax: max,
-                ticks: { stepSize: mode === "sections" ? 10 : 2, showLabelBackdrop: false, color: "#6B7280", font: { size: 10 } },
+                ticks: { stepSize: 10, showLabelBackdrop: false, color: "#6B7280", font: { size: 12 } },
                 grid: { color: "rgba(148,163,184,.25)" },
                 angleLines: { color: "rgba(148,163,184,.25)" },
-                pointLabels: { color: "#111827", font: { size: 10 } },
+                pointLabels: { color: "#111827", font: { size: 14 } },
               }
             }
           }
