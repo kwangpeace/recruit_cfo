@@ -205,11 +205,31 @@ app.get("/api/health", async (_req, res) => {
 
 function extractJson(text) {
   if (typeof text !== "string") throw new Error("AI response is not text");
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    try {
+      return JSON.parse(fenced[1].trim());
+    } catch {}
+  }
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) throw new Error("JSON not found in AI response");
-  const raw = text.slice(start, end + 1);
-  return JSON.parse(raw);
+  if (start !== -1 && end !== -1 && end > start) {
+    const raw = text.slice(start, end + 1);
+    try {
+      return JSON.parse(raw);
+    } catch {}
+  }
+
+  // fallback: score array만 있는 응답 복구
+  const arr = text.match(/\[\s*[-\d,\s.]+\s*\]/);
+  if (arr?.[0]) {
+    try {
+      const scores = JSON.parse(arr[0]);
+      return { scores };
+    } catch {}
+  }
+
+  throw new Error(`JSON not found in AI response: ${text.slice(0, 240)}`);
 }
 
 function nearestAllowed(value, allowed) {
@@ -270,7 +290,8 @@ async function callGeminiGenerateContent({ apiKey, model, prompt, extraParts = [
     ],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 400
+      maxOutputTokens: 400,
+      responseMimeType: "application/json"
     }
   };
 
