@@ -205,13 +205,13 @@
 
     <div id="entry" class="panel active">
       <div class="workflow">
-        <div class="sec" style="margin-bottom:0;">
+        <div class="sec" id="wf-candidate" style="margin-bottom:0; order:2;">
           <div class="wf-head">
             <div>
-              <div class="step">1) 지원자 선택/추가</div>
-              <div class="desc">먼저 평가할 후보자를 고르고 이름을 정리하세요.</div>
+              <div class="step">2) 지원자 정보</div>
+              <div class="desc">Gemini 평가 후 지원자 이름과 후보군을 정리하세요.</div>
             </div>
-            <span class="tag">필수</span>
+            <span class="tag">다음 단계</span>
           </div>
           <div class="wf-body">
             <div class="candidate-tabs" id="ctabs"></div>
@@ -224,11 +224,11 @@
           </div>
         </div>
 
-        <div class="sec" style="margin-bottom:0;">
+        <div class="sec" id="wf-gemini" style="margin-bottom:0; order:1;">
           <div class="wf-head">
             <div>
-              <div class="step">2) Gemini 자동평가 (고정)</div>
-              <div class="desc">이력서를 올리면 Gemini가 12개 항목을 채우고, 이후 평균 계산에 반영됩니다.</div>
+              <div class="step">1) 이력서 업로드 + Gemini 자동평가</div>
+              <div class="desc">먼저 이력서를 올리고 Gemini가 12개 항목 점수를 채우게 하세요.</div>
             </div>
             <span class="tag">먼저 실행</span>
           </div>
@@ -247,13 +247,15 @@
         <div class="sec" style="margin-bottom:0;">
           <div class="wf-head">
             <div>
-              <div class="step">3) 내 평가(면접관)</div>
-              <div class="desc">면접관을 선택하고 항목별 점수를 입력하세요. (Gemini + 면접관 평균이 최종 점수)</div>
+              <div class="step">3) 평가 화면 (Gemini/면접관 보기)</div>
+              <div class="desc">Gemini 평가를 확인한 뒤, 면접관을 선택해 추가 점수를 입력하세요.</div>
             </div>
             <span class="tag">선택</span>
           </div>
           <div class="wf-body">
             <div class="inline">
+              <button class="btn" onclick="viewGeminiEvaluation()">Gemini 평가 보기</button>
+              <button class="btn" onclick="viewFirstHumanEvaluation()">내 평가 보기</button>
               <span class="muted" style="font-size:12px;align-self:center;white-space:nowrap;">면접관</span>
               <select id="interviewer" onchange="switchInterviewer()" style="font-size:12px;padding:6px 10px;border-radius:10px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);min-width:220px;">
               </select>
@@ -580,6 +582,38 @@
         loadCandidate();
       }
 
+      function viewGeminiEvaluation(){
+        const idx = interviewers.findIndex(iv => iv?.type === "gemini");
+        if(idx < 0){
+          toast("Gemini 면접관이 없습니다.");
+          return;
+        }
+        currentInterviewerIndex = idx;
+        buildInterviewerSelect();
+        refreshEvalContext();
+        loadCandidate();
+      }
+
+      function viewFirstHumanEvaluation(){
+        const idx = interviewers.findIndex(iv => iv?.type !== "gemini");
+        if(idx < 0){
+          toast("사람 면접관이 없습니다.");
+          return;
+        }
+        currentInterviewerIndex = idx;
+        buildInterviewerSelect();
+        refreshEvalContext();
+        loadCandidate();
+      }
+
+      function candidateNameFromFile(fileName){
+        return String(fileName || "")
+          .replace(/\.[^.]+$/, "")
+          .replaceAll("_", " ")
+          .replaceAll("-", " ")
+          .trim();
+      }
+
       function addInterviewer(){
         const n = interviewers.length + 1;
         interviewers.push({ name: `면접관 ${n}`, type: "human" });
@@ -681,6 +715,13 @@
           if(!Array.isArray(scores) || scores.length !== 12) throw new Error("응답 형식이 올바르지 않습니다.");
 
           c.scoresByInterviewer[geminiIndex] = scores.map(v => parseInt(v, 10) || 0);
+          const currentName = String(c.name || "").trim();
+          const isDefaultName = /^후보자\s*[A-Z0-9가-힣]+$/i.test(currentName) || /^지원자\s*\d+$/i.test(currentName);
+          const guessedName = candidateNameFromFile(file?.name || "");
+          if(isDefaultName && guessedName){
+            c.name = guessedName;
+            buildCtabs();
+          }
           toast("Gemini 자동평가가 완료됐어요.");
           // 다음 단계로 자연스럽게: 첫 번째 사람 면접관으로 이동
           const firstHuman = interviewers.findIndex(iv => iv?.type !== "gemini");
