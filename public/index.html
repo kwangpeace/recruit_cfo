@@ -671,41 +671,19 @@
         return true;
       }
 
-      async function fetchNameFromResumeFile(file){
-        if(!file) return "";
-        try{
-          const form = new FormData();
-          form.append("resume", file, file.name);
-          const res = await fetch("/api/resume/extract-name", { method: "POST", body: form });
-          const data = await res.json().catch(()=>null);
-          if(res.ok && data?.ok){
-            return String(data?.name || "").trim();
-          }
-        }catch(_e){}
-        return "";
-      }
-
-      async function onResumeFileSelected(){
+      function onResumeFileSelected(){
         const fileInput = document.getElementById("resume-file");
         const file = fileInput?.files?.[0];
         const c = candidates[cur];
         if(!file || !c) return;
-        if(!isDefaultCandidateName(c.name)) return;
 
-        const status = document.getElementById("ai-status");
-        if(status) status.textContent = "이력서에서 이름 추출 중…";
-
-        let finalName = await fetchNameFromResumeFile(file);
+        // 단순/안정 모드: 파일명에서 바로 이름 추출해 즉시 반영
+        const finalName = candidateNameFromFile(file.name);
         if(!finalName){
-          finalName = candidateNameFromFile(file.name);
-        }
-        if(!finalName){
-          if(status) status.textContent = "";
           return;
         }
 
         applyCandidateName(finalName);
-        if(status) status.textContent = "";
         toast(`지원자 이름 자동반영: ${finalName}`);
       }
 
@@ -812,14 +790,8 @@
 
           c.scoresByInterviewer[geminiIndex] = scores.map(v => parseInt(v, 10) || 0);
           c.geminiDone = true;
-          const currentName = String(c.name || "").trim();
-          const isDefaultName = isDefaultCandidateName(currentName);
-          let guessedName = "";
-          if(isDefaultName){
-            guessedName = await fetchNameFromResumeFile(file);
-            if(!guessedName) guessedName = candidateNameFromFile(file?.name || "");
-          }
-          if(isDefaultName && guessedName){
+          const guessedName = candidateNameFromFile(file?.name || "");
+          if(isDefaultCandidateName(c.name) && guessedName){
             applyCandidateName(guessedName);
           }
           toast("Gemini 자동평가가 완료됐어요.");
