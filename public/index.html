@@ -106,7 +106,7 @@
       min-width:260px;
       max-width:100%;
     }
-    .score-box{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+    .score-box{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1.25rem}
     .metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 12px}
     .metric .lbl{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px}
     .metric .val{font-size:22px;font-weight:500;color:var(--color-text-primary)}
@@ -273,7 +273,8 @@
         <div class="metric"><div class="lbl">총점</div><div class="val" id="total">0</div><div class="sub">/ 100점</div></div>
         <div class="metric"><div class="lbl">A. 필수요건</div><div class="val" id="sa">0</div><div class="sub">/ 30점</div></div>
         <div class="metric"><div class="lbl">B. 직무역량</div><div class="val" id="sb">0</div><div class="sub">/ 40점</div></div>
-        <div class="metric"><div class="lbl">C+D. 기타</div><div class="val" id="scd">0</div><div class="sub">/ 30점</div></div>
+        <div class="metric"><div class="lbl">C. 우대사항</div><div class="val" id="sc">0</div><div class="sub">/ 20점</div></div>
+        <div class="metric"><div class="lbl">D. 문화·리더십</div><div class="val" id="sd">0</div><div class="sub">/ 10점</div></div>
       </div>
 
       <div id="verdict" class="verdict v-fail">판정: 평가 전</div>
@@ -816,7 +817,8 @@
         document.getElementById('total').textContent = String(tot);
         document.getElementById('sa').textContent = String(sa);
         document.getElementById('sb').textContent = String(sb);
-        document.getElementById('scd').textContent = String(sc+sd);
+        document.getElementById('sc').textContent = String(sc);
+        document.getElementById('sd').textContent = String(sd);
         document.getElementById('pts-a').textContent = `${sa} / 30점`;
         document.getElementById('pts-b').textContent = `${sb} / 40점`;
         document.getElementById('pts-c').textContent = `${sc} / 20점`;
