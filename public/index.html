@@ -196,6 +196,21 @@
       </div>
     </div>
     <div id="toast" class="toast"></div>
+    <div class="sec" style="margin:10px 16px 0;">
+      <div class="wf-head">
+        <div>
+          <div class="step">페이지 진행 순서</div>
+          <div class="desc">평가자 업무 흐름에 맞춰 아래 순서대로 진행하세요.</div>
+        </div>
+        <span class="tag">가이드</span>
+      </div>
+      <div class="wf-body" style="font-size:12px;line-height:1.7;color:var(--color-text-secondary);">
+        1. 이력서를 업로드합니다.<br/>
+        2. Gemini가 정리/평가한 내용을 확인합니다.<br/>
+        3. 면접관 정보를 선택하고 이름을 변경한 뒤 평가를 진행합니다.<br/>
+        4. 비교 매트릭스에서 후보자 간 결과를 비교합니다.
+      </div>
+    </div>
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab('entry')">점수 입력</button>
@@ -266,6 +281,8 @@
               <span class="muted" style="font-size:12px;align-self:center;">현재 <b id="interviewer-count">0</b>명</span>
             </div>
             <div class="muted" id="eval-context" style="font-size:12px; margin:10px 2px 0;">
+            </div>
+            <div class="muted" id="flow-guard" style="font-size:12px; margin:8px 2px 0;">
             </div>
           </div>
         </div>
@@ -503,7 +520,8 @@
 
       let candidates = Array.from({length:INITIAL_CANDIDATES},(_,i)=>({
         name: i===0?'지원자 A':i===1?'지원자 B':i===2?'지원자 C':i===3?'지원자 D':`지원자 ${i+1}`,
-        scoresByInterviewer: interviewers.map(() => emptyScores())
+        scoresByInterviewer: interviewers.map(() => emptyScores()),
+        geminiDone: false,
       }));
 
       function toast(msg){
@@ -660,6 +678,7 @@
         candidates.push({
           name: `지원자 ${n}`,
           scoresByInterviewer: interviewers.map(() => emptyScores()),
+          geminiDone: false,
         });
         cur = candidates.length - 1;
         buildCtabs();
@@ -715,6 +734,7 @@
           if(!Array.isArray(scores) || scores.length !== 12) throw new Error("응답 형식이 올바르지 않습니다.");
 
           c.scoresByInterviewer[geminiIndex] = scores.map(v => parseInt(v, 10) || 0);
+          c.geminiDone = true;
           const currentName = String(c.name || "").trim();
           const isDefaultName = /^후보자\s*[A-Z0-9가-힣]+$/i.test(currentName) || /^지원자\s*\d+$/i.test(currentName);
           const guessedName = candidateNameFromFile(file?.name || "");
@@ -753,7 +773,7 @@
 
       function loadCandidate(){
         if(!candidates.length){
-          candidates = [{ name: "지원자 1", scoresByInterviewer: interviewers.map(() => emptyScores()) }];
+          candidates = [{ name: "지원자 1", scoresByInterviewer: interviewers.map(() => emptyScores()), geminiDone: false }];
           cur = 0;
           buildCtabs();
         }
@@ -765,6 +785,7 @@
           const arr = by[currentInterviewerIndex] || emptyScores();
           s.value = arr[i] ?? 0;
         });
+        setScoreInputLock();
         recalc();
       }
 
@@ -812,7 +833,8 @@
               outBy[j][i] = parseInt(arr?.[i]) || 0;
             }
           }
-          return { name, scoresByInterviewer: outBy };
+          const inferredGeminiDone = outBy[0]?.some((v) => (parseInt(v, 10) || 0) > 0) || false;
+          return { name, scoresByInterviewer: outBy, geminiDone: !!c?.geminiDone || inferredGeminiDone };
         }
         if(Array.isArray(c?.scores)){
           const out = Array(12).fill(0);
@@ -822,9 +844,26 @@
           const targetLen = Math.max(1, interviewers.length);
           const outBy = Array.from({ length: targetLen }, () => emptyScores());
           outBy[0] = out;
-          return { name, scoresByInterviewer: outBy };
+          const inferredGeminiDone = outBy[0]?.some((v) => (parseInt(v, 10) || 0) > 0) || false;
+          return { name, scoresByInterviewer: outBy, geminiDone: !!c?.geminiDone || inferredGeminiDone };
         }
-        return { name, scoresByInterviewer: interviewers.map(() => emptyScores()) };
+        return { name, scoresByInterviewer: interviewers.map(() => emptyScores()), geminiDone: !!c?.geminiDone };
+      }
+
+      function setScoreInputLock(){
+        const c = candidates[cur] || {};
+        const iv = interviewers[currentInterviewerIndex] || {};
+        const shouldLock = iv?.type !== "gemini" && !c?.geminiDone;
+        const selects = document.querySelectorAll('#entry select[onchange^="score("]');
+        selects.forEach((s) => {
+          s.disabled = !!shouldLock;
+        });
+        const guard = document.getElementById("flow-guard");
+        if(guard){
+          guard.textContent = shouldLock
+            ? "먼저 1단계에서 Gemini 자동평가를 완료해야 3단계(면접관 평가) 점수 입력이 열립니다."
+            : "";
+        }
       }
 
       function ensureGeminiInterviewer(){
