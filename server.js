@@ -239,18 +239,8 @@ async function extractResumeText(file) {
 
   // pdf
   if (mime.includes("pdf") || name.endsWith(".pdf")) {
-    const mod = await import("pdf-parse");
-    const pdfParse =
-      (typeof mod === "function" ? mod : null) ||
-      (typeof mod?.default === "function" ? mod.default : null) ||
-      (typeof mod?.default?.default === "function" ? mod.default.default : null) ||
-      (typeof mod?.pdfParse === "function" ? mod.pdfParse : null) ||
-      (typeof mod?.parse === "function" ? mod.parse : null);
-    if (typeof pdfParse !== "function") {
-      throw new Error(`pdf-parse is not a function (exports: ${Object.keys(mod || {}).join(",")})`);
-    }
-    const parsed = await pdfParse(file.buffer);
-    return parsed?.text || "";
+    // PDF는 Gemini에 바이너리로 직접 전달하는 방식이 더 안정적입니다.
+    return "";
   }
 
   // docx
@@ -266,7 +256,7 @@ async function extractResumeText(file) {
   return file.buffer.toString("utf8");
 }
 
-async function callGeminiGenerateContent({ apiKey, model, prompt }) {
+async function callGeminiGenerateContent({ apiKey, model, prompt, extraParts = [] }) {
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
@@ -274,7 +264,7 @@ async function callGeminiGenerateContent({ apiKey, model, prompt }) {
     contents: [
       {
         role: "user",
-        parts: [{ text: prompt }]
+        parts: [{ text: prompt }, ...extraParts]
       }
     ],
     generationConfig: {
@@ -414,6 +404,9 @@ app.post(
       const file = req.file;
       if (!file) return res.status(400).json({ ok: false, error: "resume file is required" });
 
+      const mime = String(file.mimetype || "");
+      const originalName = String(file.originalname || "").toLowerCase();
+      const isPdf = mime.includes("pdf") || originalName.endsWith(".pdf");
       const resumeTextRaw = await extractResumeText(file);
       const resumeText = String(resumeTextRaw || "").slice(0, 12000);
       const candidateName = String(req.body?.candidateName || "").slice(0, 80);
@@ -435,10 +428,23 @@ ${itemsText}
   "scores": [A1, A2, A3, B1, B2, B3, B4, C1, C2, C3, D1, D2]
 }
 
-이력서(이름: ${candidateName || "알수없음"}):
-${resumeText}`;
+이력서(이름: ${candidateName || "알수없음"})를 기반으로 평가해.
+${isPdf ? "첨부된 PDF 파일 내용을 우선 근거로 사용하고, 텍스트가 추가되었으면 함께 참고해." : "아래 텍스트를 근거로 사용해."}
 
-      const { text } = await callGeminiGenerateContent({ apiKey, model, prompt });
+이력서 텍스트:
+${resumeText || "(텍스트 없음 - 첨부 파일 참고)"}`;
+
+      const extraParts = [];
+      if (isPdf) {
+        extraParts.push({
+          inline_data: {
+            mime_type: "application/pdf",
+            data: file.buffer.toString("base64")
+          }
+        });
+      }
+
+      const { text } = await callGeminiGenerateContent({ apiKey, model, prompt, extraParts });
       const parsed = extractJson(text);
       const scoresRaw = parsed?.scores;
       if (!Array.isArray(scoresRaw) || scoresRaw.length !== 12) {
