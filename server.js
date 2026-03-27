@@ -258,7 +258,8 @@ async function extractResumeText(file) {
 
 async function callGeminiGenerateContent({ apiKey, model, prompt, extraParts = [] }) {
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const normModel = normalizeModelName(model);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   const body = {
     contents: [
@@ -322,6 +323,52 @@ async function callGeminiGenerateContent({ apiKey, model, prompt, extraParts = [
 function isQuotaErrorMessage(msg) {
   const s = String(msg || "").toLowerCase();
   return s.includes("quota exceeded") || s.includes("rate limit") || s.includes("429");
+}
+
+function isModelNotFoundMessage(msg) {
+  const s = String(msg || "").toLowerCase();
+  return s.includes("is not found for api version") || s.includes("not supported for generatecontent");
+}
+
+function normalizeModelName(model) {
+  const m = String(model || "").trim();
+  if (!m) return "";
+  return m.startsWith("models/") ? m.slice("models/".length) : m;
+}
+
+async function listGeminiModels(apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+  const data = await new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = https.request(
+      {
+        method: "GET",
+        hostname: u.hostname,
+        path: u.pathname + u.search,
+      },
+      (resp) => {
+        let raw = "";
+        resp.on("data", (chunk) => {
+          raw += chunk;
+        });
+        resp.on("end", () => {
+          try {
+            resolve(JSON.parse(raw || "{}"));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.end();
+  });
+
+  const models = Array.isArray(data?.models) ? data.models : [];
+  return models
+    .filter((m) => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+    .map((m) => normalizeModelName(m?.name))
+    .filter(Boolean);
 }
 
 const GEMINI_ITEMS = [
@@ -405,7 +452,7 @@ app.post(
   async (req, res) => {
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const preferredModel = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+      const preferredModel = normalizeModelName(process.env.GEMINI_MODEL || "gemini-2.5-flash");
       const file = req.file;
       if (!file) return res.status(400).json({ ok: false, error: "resume file is required" });
 
@@ -449,11 +496,17 @@ ${resumeText || "(텍스트 없음 - 첨부 파일 참고)"}`;
         });
       }
 
-      const fallbackModels = [
+      const discoveredModels = await listGeminiModels(apiKey).catch(() => []);
+      const candidateModels = [
         preferredModel,
-        "gemini-1.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
         "gemini-1.5-pro",
-      ].filter((m, i, arr) => m && arr.indexOf(m) === i);
+        "gemini-1.5-flash",
+      ].map(normalizeModelName).filter((m, i, arr) => m && arr.indexOf(m) === i);
+      const fallbackModels = candidateModels.filter((m) => discoveredModels.length === 0 || discoveredModels.includes(m));
+      if (!fallbackModels.length && discoveredModels.length) fallbackModels.push(discoveredModels[0]);
 
       let text = "";
       let usedModel = preferredModel;
@@ -468,7 +521,7 @@ ${resumeText || "(텍스트 없음 - 첨부 파일 참고)"}`;
           break;
         } catch (e) {
           lastErr = e;
-          const isQuota = isQuotaErrorMessage(e?.message);
+          const isQuota = isQuotaErrorMessage(e?.message) || isModelNotFoundMessage(e?.message);
           const hasNext = i < fallbackModels.length - 1;
           if (!isQuota || !hasNext) throw e;
         }
