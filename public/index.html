@@ -631,7 +631,7 @@
           toast("이력서 파일을 먼저 선택하세요.");
           return;
         }
-        const geminiIndex = interviewers.findIndex(iv => iv?.type === "gemini");
+        const geminiIndex = ensureGeminiInterviewer();
         if(geminiIndex < 0){
           toast("Gemini 면접관이 없습니다.");
           return;
@@ -773,6 +773,22 @@
           return { name, scoresByInterviewer: outBy };
         }
         return { name, scoresByInterviewer: interviewers.map(() => emptyScores()) };
+      }
+
+      function ensureGeminiInterviewer(){
+        const existingIdx = interviewers.findIndex(iv => iv?.type === "gemini");
+        if(existingIdx >= 0){
+          if(!interviewers[existingIdx].name) interviewers[existingIdx].name = "Gemini";
+          return existingIdx;
+        }
+        interviewers.unshift({ name: "Gemini", type: "gemini" });
+        candidates = (candidates || []).map(c => {
+          const by = Array.isArray(c?.scoresByInterviewer) ? [...c.scoresByInterviewer] : [];
+          by.unshift(emptyScores());
+          return { ...c, scoresByInterviewer: by };
+        });
+        currentInterviewerIndex = Math.max(0, currentInterviewerIndex + 1);
+        return 0;
       }
 
       function recalc(){
@@ -1093,6 +1109,7 @@
 
           const nextCandidatesRaw = Array.isArray(payload.candidates) ? payload.candidates : [];
           candidates = nextCandidatesRaw.map(normalizeCandidate);
+          ensureGeminiInterviewer();
 
           cur = 0;
           currentInterviewerIndex = 0;
@@ -1124,6 +1141,7 @@
       function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#96;"); }
 
       // init
+      ensureGeminiInterviewer();
       buildInterviewerSelect();
       buildCtabs();
       loadCandidate();
@@ -1146,6 +1164,7 @@
 
                 const nextCandidatesRaw = Array.isArray(payload.candidates) ? payload.candidates : [];
                 candidates = nextCandidatesRaw.map(normalizeCandidate);
+                ensureGeminiInterviewer();
 
                 currentInterviewerIndex = 0;
                 buildInterviewerSelect();
