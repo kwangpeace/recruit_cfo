@@ -792,32 +792,36 @@
       }
 
       function recalc(){
-        const avg = avgScoresOfCandidate(candidates[cur] || {});
-        const sa = avg[0]+avg[1]+avg[2];
-        const sb = avg[3]+avg[4]+avg[5]+avg[6];
-        const sc = avg[7]+avg[8]+avg[9];
-        const sd = avg[10]+avg[11];
+        const c = candidates[cur] || {};
+        const by = Array.isArray(c?.scoresByInterviewer) ? c.scoresByInterviewer : [];
+        const selected = by[currentInterviewerIndex] || emptyScores();
+
+        // 점수 입력 화면은 "현재 선택 면접관"의 합계 점수로 보여줍니다.
+        const sa = selected[0]+selected[1]+selected[2];
+        const sb = selected[3]+selected[4]+selected[5]+selected[6];
+        const sc = selected[7]+selected[8]+selected[9];
+        const sd = selected[10]+selected[11];
         const tot = sa+sb+sc+sd;
 
-        document.getElementById('total').textContent = fmt1(tot);
-        document.getElementById('sa').textContent = fmt1(sa);
-        document.getElementById('sb').textContent = fmt1(sb);
-        document.getElementById('scd').textContent = fmt1(sc+sd);
-        document.getElementById('pts-a').textContent = fmt1(sa)+' / 30점';
-        document.getElementById('pts-b').textContent = fmt1(sb)+' / 40점';
-        document.getElementById('pts-c').textContent = fmt1(sc)+' / 20점';
-        document.getElementById('pts-d').textContent = fmt1(sd)+' / 10점';
+        document.getElementById('total').textContent = String(tot);
+        document.getElementById('sa').textContent = String(sa);
+        document.getElementById('sb').textContent = String(sb);
+        document.getElementById('scd').textContent = String(sc+sd);
+        document.getElementById('pts-a').textContent = `${sa} / 30점`;
+        document.getElementById('pts-b').textContent = `${sb} / 40점`;
+        document.getElementById('pts-c').textContent = `${sc} / 20점`;
+        document.getElementById('pts-d').textContent = `${sd} / 10점`;
 
         const vd = document.getElementById('verdict');
         if(sa < 20){
           vd.className='verdict v-fail';
-          vd.textContent='판정: 서류 탈락 — 필수요건(A) 미달 ('+fmt1(sa)+'/30점)';
+          vd.textContent='판정: 서류 탈락 — 필수요건(A) 미달 ('+sa+'/30점)';
         } else if(tot >= 70){
           vd.className='verdict v-pass';
-          vd.textContent='판정: 합격 권고 — 총점 '+fmt1(tot)+'점 (기준 70점 이상)';
+          vd.textContent='판정: 합격 권고 — 총점 '+tot+'점 (기준 70점 이상)';
         } else {
           vd.className='verdict v-review';
-          vd.textContent='판정: 검토 필요 — 총점 '+fmt1(tot)+'점 (기준 미달, 개별 판단 권고)';
+          vd.textContent='판정: 검토 필요 — 총점 '+tot+'점 (기준 미달, 개별 판단 권고)';
         }
       }
 
