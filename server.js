@@ -203,25 +203,73 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+/** 문자열 리터럴 안의 } 를 무시하고 첫 번째 완전한 JSON 객체 { ... } 를 잘라냄 */
+function sliceBalancedJsonObject(s) {
+  const start = s.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (c === "\\") {
+        escape = true;
+        continue;
+      }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function extractJson(text) {
   if (typeof text !== "string") throw new Error("AI response is not text");
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("AI response is empty");
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced?.[1]) {
     try {
       return JSON.parse(fenced[1].trim());
     } catch {}
   }
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {}
+
+  const balanced = sliceBalancedJsonObject(trimmed);
+  if (balanced) {
+    try {
+      return JSON.parse(balanced);
+    } catch {}
+  }
+
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
   if (start !== -1 && end !== -1 && end > start) {
-    const raw = text.slice(start, end + 1);
+    const raw = trimmed.slice(start, end + 1);
     try {
       return JSON.parse(raw);
     } catch {}
   }
 
-  // fallback: score array만 있는 응답 복구
-  const arr = text.match(/\[\s*[-\d,\s.]+\s*\]/);
+  const arr = trimmed.match(/\[\s*[-\d,\s.]+\s*\]/);
   if (arr?.[0]) {
     try {
       const scores = JSON.parse(arr[0]);
@@ -229,7 +277,10 @@ function extractJson(text) {
     } catch {}
   }
 
-  throw new Error(`JSON not found in AI response: ${text.slice(0, 240)}`);
+  const preview = trimmed.length > 400 ? `${trimmed.slice(0, 400)}…` : trimmed;
+  throw new Error(
+    `JSON not found or incomplete in AI response (often token limit). Preview: ${preview}`
+  );
 }
 
 function nearestAllowed(value, allowed) {
@@ -290,7 +341,8 @@ async function callGeminiGenerateContent({ apiKey, model, prompt, extraParts = [
     ],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 400,
+      // 12개 숫자 JSON도 PDF 컨텍스트에서 잘리면 `{`만 오는 경우가 있어 여유 있게 설정
+      maxOutputTokens: 2048,
       responseMimeType: "application/json"
     }
   };
@@ -333,10 +385,21 @@ async function callGeminiGenerateContent({ apiKey, model, prompt, extraParts = [
   if (data?.error) {
     throw new Error(String(data?.error?.message || data?.error));
   }
+  const cand = data?.candidates?.[0];
+  const finishReason = cand?.finishReason || "";
   const text =
-    data?.candidates?.[0]?.content?.parts?.map((p) => p?.text).join("") ||
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-    JSON.stringify(data);
+    cand?.content?.parts?.map((p) => p?.text).filter(Boolean).join("") ||
+    cand?.content?.parts?.[0]?.text ||
+    "";
+
+  if (!text) {
+    throw new Error(JSON.stringify(data).slice(0, 500));
+  }
+  if (finishReason === "MAX_TOKENS" && text.trim().length < 20) {
+    throw new Error(
+      `Model output truncated (MAX_TOKENS). Try again or reduce PDF size. preview=${text.slice(0, 80)}`
+    );
+  }
 
   return { text, data };
 }
