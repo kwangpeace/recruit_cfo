@@ -712,21 +712,9 @@
         const fileInput = document.getElementById("resume-file");
         const file = fileInput?.files?.[0];
         if(!file) return;
-        const targetIdx = ensureCandidateSlotForFile(file.name);
-        const c = candidates[targetIdx];
-        if(!c) return;
-
-        // 단순/안정 모드: 파일명에서 바로 이름 추출해 즉시 반영
-        const finalName = candidateNameFromFile(file.name);
-        if(!finalName){
-          return;
-        }
-
-        const before = String(c.name || "");
-        applyCandidateName(finalName);
-        if(before !== finalName){
-          toast(`지원자 이름 자동반영: ${finalName}`);
-        }
+        // 파일 선택 시점에는 후보자 데이터를 변경하지 않습니다.
+        // 실제 반영은 Gemini 자동채점 버튼 실행 시점에만 수행합니다.
+        toast("파일 선택 완료. 'Gemini로 자동채점'을 누르면 대상 후보자 슬롯에 반영됩니다.");
       }
 
       function addInterviewer(){
