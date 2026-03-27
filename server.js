@@ -319,6 +319,11 @@ async function callGeminiGenerateContent({ apiKey, model, prompt, extraParts = [
   return { text, data };
 }
 
+function isQuotaErrorMessage(msg) {
+  const s = String(msg || "").toLowerCase();
+  return s.includes("quota exceeded") || s.includes("rate limit") || s.includes("429");
+}
+
 const GEMINI_ITEMS = [
   {
     key: "A1",
@@ -400,7 +405,7 @@ app.post(
   async (req, res) => {
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+      const preferredModel = process.env.GEMINI_MODEL || "gemini-1.5-flash";
       const file = req.file;
       if (!file) return res.status(400).json({ ok: false, error: "resume file is required" });
 
@@ -444,7 +449,32 @@ ${resumeText || "(텍스트 없음 - 첨부 파일 참고)"}`;
         });
       }
 
-      const { text } = await callGeminiGenerateContent({ apiKey, model, prompt, extraParts });
+      const fallbackModels = [
+        preferredModel,
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+      ].filter((m, i, arr) => m && arr.indexOf(m) === i);
+
+      let text = "";
+      let usedModel = preferredModel;
+      let lastErr = null;
+      for (let i = 0; i < fallbackModels.length; i++) {
+        const model = fallbackModels[i];
+        try {
+          const out = await callGeminiGenerateContent({ apiKey, model, prompt, extraParts });
+          text = out.text;
+          usedModel = model;
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const isQuota = isQuotaErrorMessage(e?.message);
+          const hasNext = i < fallbackModels.length - 1;
+          if (!isQuota || !hasNext) throw e;
+        }
+      }
+      if (lastErr) throw lastErr;
+
       const parsed = extractJson(text);
       const scoresRaw = parsed?.scores;
       if (!Array.isArray(scoresRaw) || scoresRaw.length !== 12) {
@@ -456,7 +486,7 @@ ${resumeText || "(텍스트 없음 - 첨부 파일 참고)"}`;
         return allowed.includes(v) ? v : nearestAllowed(v, allowed);
       });
 
-      return res.json({ ok: true, scores, modelText: text.slice(0, 800) });
+      return res.json({ ok: true, scores, model: usedModel, modelText: text.slice(0, 800) });
     } catch (e) {
       console.error("[gemini/evaluate] error", e);
       return res.status(500).json({ ok: false, error: String(e?.message ?? e) });
