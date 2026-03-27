@@ -682,12 +682,7 @@
       }
 
       function resolveCandidateSlotForFile(fileName){
-        const guessedName = candidateNameFromFile(fileName || "");
-        if(guessedName){
-          const exactIdx = candidates.findIndex((c) => String(c?.name || "").trim() === guessedName);
-          if(exactIdx >= 0) return exactIdx;
-        }
-
+        // 규칙: 항상 첫 번째 "빈 후보자 슬롯"을 우선 사용
         const emptyIdx = candidates.findIndex((c) =>
           isDefaultCandidateName(c?.name) &&
           !c?.geminiDone &&
