@@ -250,7 +250,7 @@
           </div>
           <div class="wf-body">
             <div class="inline">
-              <input id="resume-file" class="grow" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="font-size:12px;">
+              <input id="resume-file" class="grow" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="font-size:12px;" onchange="onResumeFileSelected()">
               <button class="btn primary" onclick="runGeminiEvaluation()">Gemini로 자동채점</button>
               <span class="muted" id="ai-status" style="font-size:12px;align-self:center;"></span>
             </div>
@@ -626,11 +626,54 @@
       }
 
       function candidateNameFromFile(fileName){
-        return String(fileName || "")
+        const raw = String(fileName || "")
           .replace(/\.[^.]+$/, "")
           .replaceAll("_", " ")
           .replaceAll("-", " ")
           .trim();
+        if(!raw) return "";
+
+        // 흔한 접미/접두 제거
+        let cleaned = raw
+          .replace(/cfo\s*부문/ig, " ")
+          .replace(/이력서/ig, " ")
+          .replace(/resume/ig, " ")
+          .replace(/cv/ig, " ")
+          .replace(/\b\d{2,4}\b/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        // "홍길동 님" 패턴 우선
+        const honorific = cleaned.match(/([가-힣]{2,4})\s*님/);
+        if(honorific?.[1]) return honorific[1];
+
+        // 한글 이름(2~4자) 우선 추출
+        const koreanName = cleaned.match(/([가-힣]{2,4})/);
+        if(koreanName?.[1]) return koreanName[1];
+
+        return cleaned;
+      }
+
+      function isDefaultCandidateName(name){
+        const n = String(name || "").trim();
+        return /^후보자\s*[A-Z0-9가-힣]+$/i.test(n) || /^지원자\s*\d+$/i.test(n);
+      }
+
+      function onResumeFileSelected(){
+        const fileInput = document.getElementById("resume-file");
+        const file = fileInput?.files?.[0];
+        const c = candidates[cur];
+        if(!file || !c) return;
+        const guessedName = candidateNameFromFile(file.name);
+        if(!guessedName) return;
+        if(isDefaultCandidateName(c.name)){
+          c.name = guessedName;
+          buildCtabs();
+          const cnameEl = document.getElementById("cname");
+          if(cnameEl) cnameEl.value = c.name;
+          refreshEvalContext();
+          toast(`지원자 이름 자동반영: ${guessedName}`);
+        }
       }
 
       function addInterviewer(){
@@ -737,7 +780,7 @@
           c.scoresByInterviewer[geminiIndex] = scores.map(v => parseInt(v, 10) || 0);
           c.geminiDone = true;
           const currentName = String(c.name || "").trim();
-          const isDefaultName = /^후보자\s*[A-Z0-9가-힣]+$/i.test(currentName) || /^지원자\s*\d+$/i.test(currentName);
+          const isDefaultName = isDefaultCandidateName(currentName);
           const guessedName = candidateNameFromFile(file?.name || "");
           if(isDefaultName && guessedName){
             c.name = guessedName;
