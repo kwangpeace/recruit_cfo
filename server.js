@@ -531,6 +531,85 @@ const GEMINI_ITEMS = [
 ];
 
 app.post(
+  "/api/resume/extract-name",
+  upload.single("resume"),
+  async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const preferredModel = normalizeModelName(process.env.GEMINI_MODEL || "gemini-2.5-flash");
+      const file = req.file;
+      if (!file) return res.status(400).json({ ok: false, error: "resume file is required" });
+
+      const mime = String(file.mimetype || "");
+      const originalName = String(file.originalname || "");
+      const isPdf = mime.includes("pdf") || originalName.toLowerCase().endsWith(".pdf");
+      const resumeText = String(await extractResumeText(file)).slice(0, 6000);
+
+      const prompt = `너는 이력서에서 지원자 이름만 추출하는 도우미야.
+응답은 반드시 JSON만 출력해.
+형식:
+{
+  "name": "홍길동"
+}
+
+규칙:
+- 이름을 확신할 수 없으면 빈 문자열로 반환
+- '님', 직무명(CFO 등), 연도/숫자, 파일명 장식 문구는 제거
+- 한국어 이름을 우선
+
+파일명:
+${originalName}
+
+이력서 텍스트:
+${resumeText || "(텍스트 없음 - 첨부 파일 참고)"}`;
+
+      const extraParts = [];
+      if (isPdf) {
+        extraParts.push({
+          inline_data: {
+            mime_type: "application/pdf",
+            data: file.buffer.toString("base64")
+          }
+        });
+      }
+
+      const discoveredModels = await listGeminiModels(apiKey).catch(() => []);
+      const candidateModels = [
+        preferredModel,
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+      ].map(normalizeModelName).filter((m, i, arr) => m && arr.indexOf(m) === i);
+      const fallbackModels = candidateModels.filter((m) => discoveredModels.length === 0 || discoveredModels.includes(m));
+      if (!fallbackModels.length && discoveredModels.length) fallbackModels.push(discoveredModels[0]);
+
+      let text = "";
+      for (let i = 0; i < fallbackModels.length; i++) {
+        const model = fallbackModels[i];
+        try {
+          const out = await callGeminiGenerateContent({ apiKey, model, prompt, extraParts });
+          text = out.text;
+          break;
+        } catch (e) {
+          const retryable = isQuotaErrorMessage(e?.message) || isModelNotFoundMessage(e?.message);
+          const hasNext = i < fallbackModels.length - 1;
+          if (!retryable || !hasNext) throw e;
+        }
+      }
+
+      const parsed = extractJson(text);
+      const name = String(parsed?.name || "").replace(/\s+/g, " ").trim();
+      return res.json({ ok: true, name });
+    } catch (e) {
+      console.error("[resume/extract-name] error", e);
+      return res.status(500).json({ ok: false, error: String(e?.message ?? e) });
+    }
+  }
+);
+
+app.post(
   "/api/gemini/evaluate",
   upload.single("resume"),
   async (req, res) => {

@@ -659,21 +659,42 @@
         return /^후보자\s*[A-Z0-9가-힣]+$/i.test(n) || /^지원자\s*\d+$/i.test(n);
       }
 
-      function onResumeFileSelected(){
+      async function onResumeFileSelected(){
         const fileInput = document.getElementById("resume-file");
         const file = fileInput?.files?.[0];
         const c = candidates[cur];
         if(!file || !c) return;
-        const guessedName = candidateNameFromFile(file.name);
-        if(!guessedName) return;
-        if(isDefaultCandidateName(c.name)){
-          c.name = guessedName;
-          buildCtabs();
-          const cnameEl = document.getElementById("cname");
-          if(cnameEl) cnameEl.value = c.name;
-          refreshEvalContext();
-          toast(`지원자 이름 자동반영: ${guessedName}`);
+        if(!isDefaultCandidateName(c.name)) return;
+
+        const status = document.getElementById("ai-status");
+        if(status) status.textContent = "이력서에서 이름 추출 중…";
+
+        let finalName = "";
+        try{
+          const form = new FormData();
+          form.append("resume", file, file.name);
+          const res = await fetch("/api/resume/extract-name", { method: "POST", body: form });
+          const data = await res.json().catch(()=>null);
+          if(res.ok && data?.ok){
+            finalName = String(data?.name || "").trim();
+          }
+        }catch(_e){}
+
+        if(!finalName){
+          finalName = candidateNameFromFile(file.name);
         }
+        if(!finalName){
+          if(status) status.textContent = "";
+          return;
+        }
+
+        c.name = finalName;
+        buildCtabs();
+        const cnameEl = document.getElementById("cname");
+        if(cnameEl) cnameEl.value = c.name;
+        refreshEvalContext();
+        if(status) status.textContent = "";
+        toast(`지원자 이름 자동반영: ${finalName}`);
       }
 
       function addInterviewer(){
