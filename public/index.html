@@ -671,11 +671,50 @@
         return true;
       }
 
+      function candidateHasAnyScore(c){
+        const by = Array.isArray(c?.scoresByInterviewer) ? c.scoresByInterviewer : [];
+        for(const arr of by){
+          for(const v of (arr || [])){
+            if((parseInt(v, 10) || 0) > 0) return true;
+          }
+        }
+        return false;
+      }
+
+      function resolveCandidateSlotForFile(fileName){
+        const guessedName = candidateNameFromFile(fileName || "");
+        if(guessedName){
+          const exactIdx = candidates.findIndex((c) => String(c?.name || "").trim() === guessedName);
+          if(exactIdx >= 0) return exactIdx;
+        }
+
+        const emptyIdx = candidates.findIndex((c) =>
+          isDefaultCandidateName(c?.name) &&
+          !c?.geminiDone &&
+          !candidateHasAnyScore(c)
+        );
+        if(emptyIdx >= 0) return emptyIdx;
+        return cur;
+      }
+
+      function ensureCandidateSlotForFile(fileName){
+        const targetIdx = resolveCandidateSlotForFile(fileName);
+        if(targetIdx >= 0){
+          cur = targetIdx;
+          buildCtabs();
+          loadCandidate();
+          return targetIdx;
+        }
+        return cur;
+      }
+
       function onResumeFileSelected(){
         const fileInput = document.getElementById("resume-file");
         const file = fileInput?.files?.[0];
-        const c = candidates[cur];
-        if(!file || !c) return;
+        if(!file) return;
+        const targetIdx = ensureCandidateSlotForFile(file.name);
+        const c = candidates[targetIdx];
+        if(!c) return;
 
         // 단순/안정 모드: 파일명에서 바로 이름 추출해 즉시 반영
         const finalName = candidateNameFromFile(file.name);
@@ -683,8 +722,11 @@
           return;
         }
 
+        const before = String(c.name || "");
         applyCandidateName(finalName);
-        toast(`지원자 이름 자동반영: ${finalName}`);
+        if(before !== finalName){
+          toast(`지원자 이름 자동반영: ${finalName}`);
+        }
       }
 
       function addInterviewer(){
@@ -750,12 +792,13 @@
           toast("이력서 파일을 먼저 선택하세요.");
           return;
         }
+        const targetIdx = ensureCandidateSlotForFile(file.name);
         const geminiIndex = ensureGeminiInterviewer();
         if(geminiIndex < 0){
           toast("Gemini 면접관이 없습니다.");
           return;
         }
-        const c = candidates[cur];
+        const c = candidates[targetIdx];
         if(!c){
           toast("지원자를 먼저 선택하세요.");
           return;
